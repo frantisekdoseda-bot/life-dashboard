@@ -5,8 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Life Dashboard</title>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
 <style>
 body{
 margin:0;
@@ -21,14 +19,6 @@ padding:20px;
 border-radius:20px;
 margin-bottom:20px;
 }
-button{
-background:#4f46e5;
-border:none;
-padding:15px 25px;
-border-radius:12px;
-color:white;
-font-size:18px;
-}
 .big{font-size:32px;font-weight:700}
 .small{opacity:.7}
 </style>
@@ -36,11 +26,11 @@ font-size:18px;
 
 <body>
 
-<div id="app" style="display:none">
+<div id="app">
 
 <div class="card">
 <div class="small">TENTO TÝDEN</div>
-<div class="big" id="money">Načítám…</div>
+<div class="big" id="money">0 Kč dnes</div>
 </div>
 
 <div class="card">
@@ -55,41 +45,46 @@ font-size:18px;
 
 <div class="card">
 <div class="small">KALENDÁŘ</div>
-<div id="calendar">Načítám…</div>
+<div id="calendar"></div>
 </div>
 
 </div>
 
 <script>
-const { createClient } = window.supabase;
-
-function startApp(){
-  document.getElementById("login").style.display="none";
-  document.getElementById("app").style.display="block";
-
-  loadWeather();
-  loadTram();
-  loadCalendar();
-  loadMoney();
-
-  setInterval(loadTram, 60000);       // každou minutu
-  setInterval(loadWeather, 900000);   // každých 15 minut
-}
-</script>
 
 startApp();
 
 function startApp(){
-document.getElementById("app").style.display="block";
+  loadWeather();
+  loadTram();
+  loadCalendar();
 
-loadWeather();
-loadTram();
-loadCalendar();
-loadMoney();
-
-setInterval(loadTram, 60000);
-setInterval(loadWeather, 900000);
+  setInterval(loadTram, 60000);
+  setInterval(loadWeather, 900000);
 }
+
+async function loadWeather(){
+try{
+let r = await fetch("https://api.open-meteo.com/v1/forecast?latitude=50.0755&longitude=14.4378&current_weather=true");
+let j = await r.json();
+document.getElementById("weather").innerText =
+j.current_weather.temperature+"°C";
+}catch{
+document.getElementById("weather").innerText="chyba";
+}
+}
+
+function loadTram(){
+document.getElementById("tram").innerText="Strossmayerovo nám 3 min";
+}
+
+function loadCalendar(){
+document.getElementById("calendar").innerHTML=
+`<iframe src="https://calendar.google.com/calendar/embed?src=cs.czech%23holiday%40group.v.calendar.google.com&ctz=Europe%2FPrague"
+style="border:0" width="100%" height="300"></iframe>`;
+}
+
+</script>
 
 </body>
 </html>
