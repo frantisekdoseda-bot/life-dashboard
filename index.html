@@ -74,7 +74,10 @@ const supabase = window.supabase.createClient(
 
 async function login(){
 await supabase.auth.signInWithOAuth({
-provider:'google'
+provider:'google',
+options:{
+redirectTo:'https://life-dashboard-9eoc.onrender.com'
+}
 });
 }
 
@@ -92,6 +95,9 @@ loadWeather();
 loadTram();
 loadCalendar();
 loadMoney();
+
+setInterval(loadTram, 60000);      // každou minutu
+setInterval(loadWeather, 900000);  // každých 15 min
 }
 
 async function loadWeather(){
