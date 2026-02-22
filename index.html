@@ -36,12 +36,6 @@ font-size:18px;
 
 <body>
 
-<div id="login" class="card">
-<div class="big">Life dashboard</div>
-<br>
-<button onclick="login()">Přihlásit přes Google</button>
-</div>
-
 <div id="app" style="display:none">
 
 <div class="card">
@@ -69,26 +63,6 @@ font-size:18px;
 <script>
 const { createClient } = window.supabase;
 
-const supabaseClient = createClient(
-  "https://khpjmtcewzavuxkbcgu.supabase.co",
-  "sb_publishable_AXka4P4jst5XH6_ErP1LUQ_ZI9AIjGX"
-);
-
-async function login(){
-  await supabaseClient.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      redirectTo: 'https://life-dashboard-9eoc.onrender.com'
-    }
-  });
-}
-
-supabaseClient.auth.getSession().then(({ data }) => {
-  if (data.session) {
-    startApp();
-  }
-});
-
 function startApp(){
   document.getElementById("login").style.display="none";
   document.getElementById("app").style.display="block";
@@ -102,6 +76,20 @@ function startApp(){
   setInterval(loadWeather, 900000);   // každých 15 minut
 }
 </script>
+
+startApp();
+
+function startApp(){
+document.getElementById("app").style.display="block";
+
+loadWeather();
+loadTram();
+loadCalendar();
+loadMoney();
+
+setInterval(loadTram, 60000);
+setInterval(loadWeather, 900000);
+}
 
 </body>
 </html>
