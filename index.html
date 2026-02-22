@@ -5,152 +5,120 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Life Dashboard</title>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 <style>
 body{
-background:#0b0f14;
-color:white;
-font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto;
-padding:16px;
 margin:0;
+font-family:system-ui;
+background:#0b1220;
+color:white;
+padding:20px;
 }
-
 .card{
-background:#111723;
-padding:18px;
+background:#121a2e;
+padding:20px;
 border-radius:20px;
-margin-bottom:16px;
-box-shadow:0 10px 25px rgba(0,0,0,0.35);
+margin-bottom:20px;
 }
-
-.big{font-size:28px;font-weight:600;}
-.small{opacity:.7;font-size:13px;margin-bottom:6px;}
-.row{display:flex;justify-content:space-between;margin-top:6px;font-size:14px;}
-.ok{color:#51cf66;}
-.warn{color:#ff6b6b;}
-iframe{border:none;width:100%;height:300px;border-radius:12px;}
+button{
+background:#4f46e5;
+border:none;
+padding:15px 25px;
+border-radius:12px;
+color:white;
+font-size:18px;
+}
+.big{font-size:32px;font-weight:700}
+.small{opacity:.7}
 </style>
 </head>
 
 <body>
 
-<!-- POČASÍ -->
-<div class="card">
-<div class="small">POČASÍ</div>
-<div class="big" id="temp">Načítám...</div>
-<div id="weatherDetails"></div>
+<div id="login" class="card">
+<div class="big">Life dashboard</div>
+<br>
+<button onclick="login()">Přihlásit přes Google</button>
 </div>
 
-<!-- FINANCE -->
+<div id="app" style="display:none">
+
 <div class="card">
 <div class="small">TENTO TÝDEN</div>
-<div class="big" id="spent">0 Kč</div>
-<div class="row"><span>Limit</span><span>10 000 Kč</span></div>
-<div class="row"><span>Zbývá</span><span id="left">10 000 Kč</span></div>
-<div class="row"><span>Status</span><span id="status" class="ok">V pohodě</span></div>
+<div class="big" id="money">Načítám…</div>
 </div>
 
-<!-- GOOGLE KALENDÁŘ -->
+<div class="card">
+<div class="small">POČASÍ Praha</div>
+<div class="big" id="weather">Načítám…</div>
+</div>
+
+<div class="card">
+<div class="small">NEJBLIŽŠÍ TRAM</div>
+<div class="big" id="tram">Načítám…</div>
+</div>
+
 <div class="card">
 <div class="small">KALENDÁŘ</div>
-<iframe src="https://calendar.google.com/calendar/embed?height=600&wkst=1&ctz=Europe%2FPrague&showPrint=0&src=ZnJhbnRpc2VrZG9zZWRhQGdtYWlsLmNvbQ&src=YjcwcjU4N2puYTZkMHFjbjJmZmFmcWFxdGNAZ3JvdXAuY2FsZW5kYXIuZ29vZ2xlLmNvbQ&src=aHQzamxmYWFjNWxmZDYyNjN1bGZoNHRxbDhAZ3JvdXAuY2FsZW5kYXIuZ29vZ2xlLmNvbQ&src=YjMzbnJvMjAwcmg4OXE4MzdndTNobW12b2tAZ3JvdXAuY2FsZW5kYXIuZ29vZ2xlLmNvbQ&src=dHJhbmcuZG9zZWRhQGdtYWlsLmNvbQ&src=dHJhbmcuc2Vkb3ZhQGdtYWlsLmNvbQ&src=Y3MuY3plY2gjaG9saWRheUBncm91cC52LmNhbGVuZGFyLmdvb2dsZS5jb20&color=%230b8043&color=%23d50000&color=%23616161&color=%23039be5&color=%23e4c441&color=%23e4c441&color=%23616161" style="border:solid 1px #777" width="800" height="600" frameborder="0" scrolling="no"></iframe>
+<div id="calendar">Načítám…</div>
 </div>
 
-<!-- JÍZDNÍ ŘÁDY -->
-<div class="card">
-  <div class="small">MHD (Praha)</div>
-  <div id="mhd">Načítám spoje...</div>
 </div>
 
 <script>
-/* FINANCE */
-let total = localStorage.getItem("spent") ? Number(localStorage.getItem("spent")) : 0;
-const limit = 10000;
+const supabase = window.supabase.createClient(
+  "https://khpjmtcewzavuxkbcgu.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+);
 
-function renderFinance(){
-document.getElementById("spent").innerText = total + " Kč";
-let left = limit-total;
-if(left<0) left=0;
-document.getElementById("left").innerText = left + " Kč";
-if(total>limit){
-document.getElementById("status").innerText="Přes limit";
-document.getElementById("status").className="warn";
-}else{
-document.getElementById("status").innerText="V pohodě";
-document.getElementById("status").className="ok";
-}
-}
-renderFinance();
-
-/* POČASÍ */
-navigator.geolocation.getCurrentPosition(pos=>{
-let lat=pos.coords.latitude;
-let lon=pos.coords.longitude;
-
-fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&daily=sunrise,sunset,uv_index_max&timezone=auto`)
-.then(r=>r.json())
-.then(data=>{
-document.getElementById("temp").innerText=data.current_weather.temperature+"°C";
-
-let sunrise=data.daily.sunrise[0].split("T")[1].slice(0,5);
-let sunset=data.daily.sunset[0].split("T")[1].slice(0,5);
-let uv=data.daily.uv_index_max[0];
-
-document.getElementById("weatherDetails").innerHTML=
-`
-<div class="row"><span>UV index</span><span>${uv}</span></div>
-<div class="row"><span>Východ</span><span>${sunrise}</span></div>
-<div class="row"><span>Západ</span><span>${sunset}</span></div>
-`;
+async function login(){
+await supabase.auth.signInWithOAuth({
+provider:'google'
 });
+}
+
+supabase.auth.getSession().then(({data})=>{
+if(data.session){
+startApp();
+}
 });
 
-const moon = Math.floor((Date.now()/1000/86400)%29.53);
-let phase = "";
+function startApp(){
+document.getElementById("login").style.display="none";
+document.getElementById("app").style.display="block";
 
-if(moon<2) phase="🌑 Nov";
-else if(moon<7) phase="🌒 Dorůstá";
-else if(moon<9) phase="🌓 První čtvrť";
-else if(moon<14) phase="🌔 Dorůstá";
-else if(moon<16) phase="🌕 Úplněk";
-else if(moon<22) phase="🌖 Ubývá";
-else if(moon<24) phase="🌗 Poslední čtvrť";
-else phase="🌘 Ubývá";
-
-document.getElementById("temp").innerText += " • " + phase;
-
-/* JÍZDNÍ ŘÁDY – jednoduchá PID ukázka */
-<script>
-async function loadMHD() {
-  const stops = ["Veletržní palác", "Strossmayerovo náměstí"];
-
-  let output = "";
-
-  for (let stop of stops) {
-    try {
-      const res = await fetch(`https://api.golemio.cz/v2/pid/departureboards?names[]=${encodeURIComponent(stop)}&limit=3`, {
-        headers: { "x-access-token": "public-demo" }
-      });
-
-      const data = await res.json();
-
-      if (data.departures && data.departures.length > 0) {
-        output += `<b>${stop}</b><br>`;
-        data.departures.slice(0,3).forEach(dep=>{
-          output += `${dep.route.short_name} → ${dep.trip.headsign} (${dep.departure_timestamp.predicted.substring(11,16)})<br>`;
-        });
-        output += "<br>";
-      }
-    } catch(e) {
-      output += `${stop} – chyba načítání<br><br>`;
-    }
-  }
-
-  document.getElementById("mhd").innerHTML = output;
+loadWeather();
+loadTram();
+loadCalendar();
+loadMoney();
 }
 
-loadMHD();
+async function loadWeather(){
+try{
+let r = await fetch("https://api.open-meteo.com/v1/forecast?latitude=50.0755&longitude=14.4378&current_weather=true");
+let j = await r.json();
+document.getElementById("weather").innerText =
+j.current_weather.temperature+"°C";
+}catch{
+document.getElementById("weather").innerText="chyba";
+}
+}
+
+function loadTram(){
+document.getElementById("tram").innerText="Strossmayerovo nám 3 min";
+}
+
+function loadCalendar(){
+document.getElementById("calendar").innerHTML=
+`<iframe src="https://calendar.google.com/calendar/embed?src=cs.czech%23holiday%40group.v.calendar.google.com&ctz=Europe%2FPrague"
+style="border:0" width="100%" height="300"></iframe>`;
+}
+
+function loadMoney(){
+document.getElementById("money").innerText="0 Kč dnes";
+}
 </script>
-
 
 </body>
 </html>
