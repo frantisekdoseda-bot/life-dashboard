@@ -19,27 +19,26 @@ padding:20px;
 border-radius:20px;
 margin-bottom:20px;
 }
-.big{font-size:32px;font-weight:700}
-.small{opacity:.7}
+.big{font-size:34px;font-weight:700}
+.small{opacity:.6}
 </style>
 </head>
 
 <body>
 
-<div id="app">
-
 <div class="card">
-<div class="small">TENTO TÝDEN</div>
-<div class="big" id="money">0 Kč dnes</div>
-</div>
-
-<div class="card">
-<div class="small">POČASÍ Praha</div>
+<div class="small">POČASÍ</div>
 <div class="big" id="weather">Načítám…</div>
+<div id="details"></div>
 </div>
 
 <div class="card">
-<div class="small">NEJBLIŽŠÍ TRAM</div>
+<div class="small">UV / MĚSÍC</div>
+<div class="big" id="astro">Načítám…</div>
+</div>
+
+<div class="card">
+<div class="small">TRAM VELETŽNÍ / STROSS</div>
 <div class="big" id="tram">Načítám…</div>
 </div>
 
@@ -48,34 +47,57 @@ margin-bottom:20px;
 <div id="calendar"></div>
 </div>
 
-</div>
-
 <script>
+let lat, lon;
 
-startApp();
+navigator.geolocation.getCurrentPosition(pos=>{
+lat = pos.coords.latitude;
+lon = pos.coords.longitude;
+start();
+},()=>{
+document.getElementById("weather").innerText="Poloha blokována";
+});
 
-function startApp(){
-  loadWeather();
-  loadTram();
-  loadCalendar();
+async function start(){
+loadWeather();
+loadTram();
+loadCalendar();
 
-  setInterval(loadTram, 60000);
-  setInterval(loadWeather, 900000);
+setInterval(loadTram,60000);
+setInterval(loadWeather,900000);
 }
 
 async function loadWeather(){
-try{
-let r = await fetch("https://api.open-meteo.com/v1/forecast?latitude=50.0755&longitude=14.4378&current_weather=true");
-let j = await r.json();
-document.getElementById("weather").innerText =
-j.current_weather.temperature+"°C";
-}catch{
-document.getElementById("weather").innerText="chyba";
-}
+let url=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,precipitation,weathercode,uv_index&daily=moon_phase&timezone=auto`;
+
+let r=await fetch(url);
+let j=await r.json();
+
+let t=j.current.temperature_2m;
+let feel=j.current.apparent_temperature;
+let rain=j.current.precipitation;
+let uv=j.current.uv_index;
+
+document.getElementById("weather").innerText=
+`${t}°C (pocit ${feel}°C)`;
+
+document.getElementById("details").innerText=
+`Déšť: ${rain}mm   UV:${uv}`;
+
+let moon=j.daily.moon_phase[0];
+let phase="🌑";
+if(moon>0.1)phase="🌒";
+if(moon>0.25)phase="🌓";
+if(moon>0.5)phase="🌕";
+if(moon>0.75)phase="🌖";
+
+document.getElementById("astro").innerText=
+`UV ${uv}   ${phase}`;
 }
 
 function loadTram(){
-document.getElementById("tram").innerText="Strossmayerovo nám 3 min";
+document.getElementById("tram").innerText=
+"Stross 2 min • Veletržní 4 min";
 }
 
 function loadCalendar(){
@@ -83,7 +105,6 @@ document.getElementById("calendar").innerHTML=
 `<iframe src="https://calendar.google.com/calendar/embed?src=cs.czech%23holiday%40group.v.calendar.google.com&ctz=Europe%2FPrague"
 style="border:0" width="100%" height="300"></iframe>`;
 }
-
 </script>
 
 </body>
