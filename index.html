@@ -67,63 +67,39 @@ font-size:18px;
 </div>
 
 <script>
-const supabase = window.supabase.createClient(
+const { createClient } = window.supabase;
+
+const supabaseClient = createClient(
   "https://khpjmtcewzavuxkbcgu.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtocGptdGNld3phdnV4a2JrY2d1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3OTA1ODMsImV4cCI6MjA4NzM2NjU4M30.huqJnChDYMiG9Oq6MmizyUt3vmYPZWvf9p1riSCeT_U"
+  "sb_publishable_AXka4P4jst5XH6_ErP1LUQ_ZI9AIjGX"
 );
 
 async function login(){
-await supabase.auth.signInWithOAuth({
-  provider: 'google',
-  options: {
-    redirectTo: 'https://life-dashboard-9eoc.onrender.com',
-    flowType: 'pkce'
+  await supabaseClient.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: 'https://life-dashboard-9eoc.onrender.com'
+    }
+  });
+}
+
+supabaseClient.auth.getSession().then(({ data }) => {
+  if (data.session) {
+    startApp();
   }
-});
-}
-  
-supabase.auth.getSession().then(({data})=>{
-if(data.session){
-startApp();
-}
 });
 
 function startApp(){
-document.getElementById("login").style.display="none";
-document.getElementById("app").style.display="block";
+  document.getElementById("login").style.display="none";
+  document.getElementById("app").style.display="block";
 
-loadWeather();
-loadTram();
-loadCalendar();
-loadMoney();
+  loadWeather();
+  loadTram();
+  loadCalendar();
+  loadMoney();
 
-setInterval(loadTram, 60000);      // každou minutu
-setInterval(loadWeather, 900000);  // každých 15 min
-}
-
-async function loadWeather(){
-try{
-let r = await fetch("https://api.open-meteo.com/v1/forecast?latitude=50.0755&longitude=14.4378&current_weather=true");
-let j = await r.json();
-document.getElementById("weather").innerText =
-j.current_weather.temperature+"°C";
-}catch{
-document.getElementById("weather").innerText="chyba";
-}
-}
-
-function loadTram(){
-document.getElementById("tram").innerText="Strossmayerovo nám 3 min";
-}
-
-function loadCalendar(){
-document.getElementById("calendar").innerHTML=
-`<iframe src="https://calendar.google.com/calendar/embed?src=cs.czech%23holiday%40group.v.calendar.google.com&ctz=Europe%2FPrague"
-style="border:0" width="100%" height="300"></iframe>`;
-}
-
-function loadMoney(){
-document.getElementById("money").innerText="0 Kč dnes";
+  setInterval(loadTram, 60000);       // každou minutu
+  setInterval(loadWeather, 900000);   // každých 15 minut
 }
 </script>
 
