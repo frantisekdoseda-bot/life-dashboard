@@ -57,8 +57,8 @@ iframe{border:none;width:100%;height:300px;border-radius:12px;}
 
 <!-- JÍZDNÍ ŘÁDY -->
 <div class="card">
-<div class="small">NEJBLIŽŠÍ ZASTÁVKA (Praha)</div>
-<div id="transport">Načítám...</div>
+  <div class="small">MHD (Praha)</div>
+  <div id="mhd">Načítám spoje...</div>
 </div>
 
 <script>
@@ -104,28 +104,53 @@ document.getElementById("weatherDetails").innerHTML=
 });
 });
 
-/* JÍZDNÍ ŘÁDY – jednoduchá PID ukázka */
-navigator.geolocation.getCurrentPosition(pos=>{
-let lat=pos.coords.latitude;
-let lon=pos.coords.longitude;
+const moon = Math.floor((Date.now()/1000/86400)%29.53);
+let phase = "";
 
-fetch(`https://api.golemio.cz/v2/gtfs/stops?lat=${lat}&lon=${lon}&limit=1`, {
-headers: {"X-Access-Token":"public"}
-})
-.then(r=>r.json())
-.then(data=>{
-if(data.features && data.features.length>0){
-document.getElementById("transport").innerText=
-data.features[0].properties.stop_name;
-}else{
-document.getElementById("transport").innerText="Zastávka nenalezena";
+if(moon<2) phase="🌑 Nov";
+else if(moon<7) phase="🌒 Dorůstá";
+else if(moon<9) phase="🌓 První čtvrť";
+else if(moon<14) phase="🌔 Dorůstá";
+else if(moon<16) phase="🌕 Úplněk";
+else if(moon<22) phase="🌖 Ubývá";
+else if(moon<24) phase="🌗 Poslední čtvrť";
+else phase="🌘 Ubývá";
+
+document.getElementById("temp").innerText += " • " + phase;
+
+/* JÍZDNÍ ŘÁDY – jednoduchá PID ukázka */
+<script>
+async function loadMHD() {
+  const stops = ["Veletržní palác", "Strossmayerovo náměstí"];
+
+  let output = "";
+
+  for (let stop of stops) {
+    try {
+      const res = await fetch(`https://api.golemio.cz/v2/pid/departureboards?names[]=${encodeURIComponent(stop)}&limit=3`, {
+        headers: { "x-access-token": "public-demo" }
+      });
+
+      const data = await res.json();
+
+      if (data.departures && data.departures.length > 0) {
+        output += `<b>${stop}</b><br>`;
+        data.departures.slice(0,3).forEach(dep=>{
+          output += `${dep.route.short_name} → ${dep.trip.headsign} (${dep.departure_timestamp.predicted.substring(11,16)})<br>`;
+        });
+        output += "<br>";
+      }
+    } catch(e) {
+      output += `${stop} – chyba načítání<br><br>`;
+    }
+  }
+
+  document.getElementById("mhd").innerHTML = output;
 }
-})
-.catch(()=>{
-document.getElementById("transport").innerText="Nelze načíst PID";
-});
-});
+
+loadMHD();
 </script>
+
 
 </body>
 </html>
