@@ -7,16 +7,16 @@
 
 <style>
 body{
-margin:0;
-font-family:-apple-system,BlinkMacSystemFont,system-ui;
-background:#0b1220;
-color:white;
+  margin:0;
+  font-family:-apple-system,BlinkMacSystemFont,system-ui;
+  background:#0b1220;
+  color:white;
 }
 .wrap{padding:18px;max-width:520px;margin:auto;}
 .card{
-background:linear-gradient(180deg,#0f1b35,#0b1220);
-padding:20px;border-radius:24px;margin-bottom:16px;
-box-shadow:0 10px 30px rgba(0,0,0,.35);
+  background:linear-gradient(180deg,#0f1b35,#0b1220);
+  padding:20px;border-radius:24px;margin-bottom:16px;
+  box-shadow:0 10px 30px rgba(0,0,0,.35);
 }
 .big{font-size:30px;font-weight:700;}
 .row{opacity:.9;margin-top:6px;}
@@ -29,165 +29,190 @@ box-shadow:0 10px 30px rgba(0,0,0,.35);
 <body>
 <div class="wrap">
 
-<div class="card">
-<div class="big" id="city">Načítám…</div>
-<div class="big" id="temp"></div>
-<div class="row" id="meta"></div>
-<div class="row" id="sun"></div>
-<div class="small" id="forecast"></div>
-</div>
+  <div class="card">
+    <div class="big" id="city">Načítám…</div>
+    <div class="big" id="temp"></div>
+    <div class="row" id="meta"></div>
+    <div class="row" id="sun"></div>
+    <div class="small" id="forecast"></div>
+  </div>
 
-<div class="card">
-<div class="stopname">🚋 Veletržní palác</div>
-<div id="v">Načítám…</div>
+  <div class="card">
+    <div class="stopname">🚋 Veletržní palác</div>
+    <div id="v">Načítám…</div>
 
-<div class="stopname">🚋 Strossmayerovo nám.</div>
-<div id="s">Načítám…</div>
+    <div class="stopname">🚋 Strossmayerovo nám.</div>
+    <div id="s">Načítám…</div>
 
-<div class="stopname">🚋 Václavské nám. (Můstek)</div>
-<div id="m">Načítám…</div>
-</div>
+    <div class="stopname">🚋 Václavské nám. (Můstek)</div>
+    <div id="m">Načítám…</div>
+  </div>
 
 </div>
 
 <script>
-const GOLEMIO="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NDg0MCwiaWF0IjoxNzcxODA0NzA1LCJleHAiOjExNzcxODA0NzA1LCJpc3MiOiJnb2xlbWlvIiwianRpIjoiZDQzZDVlMDktNmVhZS00ZGQwLWEzMTAtMjI5YjZmZTQ4NmE0In0.5Wgnlm02CytmAfA-N6_-kXCyRhidvhcaQ7-XaO9GGsw";
+const GOLEMIO = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NDg0MCwiaWF0IjoxNzcxODA0NzA1LCJleHAiOjExNzcxODA0NzA1LCJpc3MiOiJnb2xlbWlvIiwianRpIjoiZDQzZDVlMDktNmVhZS00ZGQwLWEzMTAtMjI5YjZmZTQ4NmE0In0.5Wgnlm02CytmAfA-N6_-kXCyRhidvhcaQ7-XaO9GGsw
+";
+
+let cachedLat = null;
+let cachedLon = null;
 
 // ===== PŘESNÁ FÁZE MĚSÍCE =====
-function moonPhase(){
+function moonPhase() {
+  const now = new Date();
+  const jd = now.getTime() / 86400000 + 2440587.5;
+  const knownNewMoon = 2451550.1;
+  const synodic = 29.530588853;
 
-const now = new Date();
+  let age = (jd - knownNewMoon) % synodic;
+  if (age < 0) age += synodic;
 
-// referenční nov (funguje dlouhodobě)
-const ref = new Date(2024, 0, 11); 
-const synodic = 29.53058867;
-
-let days = (now - ref) / 86400000;
-let age = days % synodic;
-if (age < 0) age += synodic;
-
-// jednoduché fáze (ne milion)
-if (age < 1) return "🌑 Nov";
-if (age < 7.4) return "🌒 Dorůstající srpek";
-if (age < 9.4) return "🌓 První čtvrť";
-if (age < 14.8) return "🌔 Dorůstající měsíc";
-if (age < 16.8) return "🌕 Úplněk";
-if (age < 22.1) return "🌖 Ubývající měsíc";
-if (age < 24.1) return "🌗 Poslední čtvrť";
-return "🌘 Ubývající srpek";
+  if (age < 1.84566)  return "🌑 Nov";
+  if (age < 5.53699)  return "🌒 Dorůstající srpek";
+  if (age < 9.22831)  return "🌓 První čtvrť";
+  if (age < 12.91963) return "🌔 Dorůstající měsíc";
+  if (age < 16.61096) return "🌕 Úplněk";
+  if (age < 20.30228) return "🌖 Ubývající měsíc";
+  if (age < 23.99361) return "🌗 Poslední čtvrť";
+  if (age < 27.68493) return "🌘 Ubývající srpek";
+  return "🌑 Nov";
 }
 
 // ===== POČASÍ =====
-async function loadWeather(lat,lon){
+async function loadWeather(lat, lon) {
+  try {
+    let r = await fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=temperature_2m,precipitation,apparent_temperature,uv_index,windspeed_10m&daily=sunrise,sunset&timezone=Europe%2FPrague`
+    );
+    let j = await r.json();
 
-let r=await fetch(
-`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=temperature_2m,precipitation,apparent_temperature,uv_index,windspeed_10m&daily=sunrise,sunset&timezone=Europe%2FPrague`
-);
+    let now = new Date();
+    let index = j.hourly.time.findIndex(t => new Date(t) >= now);
+    if (index < 0) index = j.hourly.time.length - 1;
 
-let j=await r.json();
+    let temp = Math.round(j.current_weather.temperature);
+    let feel = Math.round(j.hourly.apparent_temperature[index]);
 
-let now=new Date();
-let index=j.hourly.time.findIndex(t=> new Date(t) > now);
-if(index<0) index=0;
+    document.getElementById("temp").innerHTML =
+      `${temp}° <span style="opacity:.6;font-size:20px">(${feel}°)</span>`;
 
-let temp=Math.round(j.current_weather.temperature);
-let feel=Math.round(j.hourly.apparent_temperature[index]);
+    document.getElementById("meta").innerHTML =
+      `🌧 ${Math.round(j.hourly.precipitation[index])}mm &nbsp; 💨 ${Math.round(j.hourly.windspeed_10m[index])}km/h &nbsp; UV ${Math.round(j.hourly.uv_index[index])}`;
 
-document.getElementById("temp").innerHTML=
-`${temp}° <span style="opacity:.6;font-size:20px">(${feel}°)</span>`;
+    let sunrise = j.daily.sunrise[0].substring(11, 16);
+    let sunset  = j.daily.sunset[0].substring(11, 16);
 
-document.getElementById("meta").innerHTML=
-`🌧 ${Math.round(j.hourly.precipitation[index])}mm &nbsp; 💨 ${Math.round(j.hourly.windspeed_10m[index])}km/h &nbsp; UV ${Math.round(j.hourly.uv_index[index])}`;
+    document.getElementById("sun").innerHTML =
+      `☀️ ${sunrise} &nbsp; 🌇 ${sunset} &nbsp; ${moonPhase()}`;
 
-let sunrise=j.daily.sunrise[0].substring(11,16);
-let sunset=j.daily.sunset[0].substring(11,16);
+    let forecast = "";
+    for (let i = 0; i < 5; i++) {
+      let idx = index + i;
+      if (!j.hourly.time[idx]) break;
 
-document.getElementById("sun").innerHTML=
-`☀️ ${sunrise} &nbsp; 🌇 ${sunset} &nbsp; ${moonPhase()}`;
+      let h      = j.hourly.time[idx].substring(11, 16);
+      let t      = Math.round(j.hourly.temperature_2m[idx]);
+      let precip = Math.round(j.hourly.precipitation[idx]);
 
-// forecast dalších 5 hodin
-let forecast="";
-for(let i=0;i<5;i++){
-let idx=index+i;
-if(!j.hourly.time[idx]) break;
+      forecast += `${h} ${t}° ${precip}mm &nbsp; `;
+    }
+    document.getElementById("forecast").innerHTML = forecast;
 
-let h=j.hourly.time[idx].substring(11,16);
-let t=Math.round(j.hourly.temperature_2m[idx]);
-let r=Math.round(j.hourly.precipitation[idx]);
-
-forecast+=`${h} ${t}° ${r}mm &nbsp; `;
-}
-document.getElementById("forecast").innerHTML=forecast;
+  } catch (e) {
+    document.getElementById("temp").innerHTML = "Chyba počasí";
+  }
 }
 
 // ===== PID =====
-async function stop(id,el){
-try{
-let r=await fetch(`https://api.golemio.cz/v2/pid/departureboards?ids=${id}&limit=12`,{
-headers:{"x-access-token":GOLEMIO}
-});
-let j=await r.json();
+async function stop(id, el) {
+  try {
+    let r = await fetch(`https://api.golemio.cz/v2/pid/departureboards?ids=${id}&limit=12`, {
+      headers: { "x-access-token": GOLEMIO }
+    });
+    let j = await r.json();
 
-if(!j.departures||j.departures.length==0){
-document.getElementById(el).innerHTML="žádné spoje";
-return;
+    if (!j.departures || j.departures.length === 0) {
+      document.getElementById(el).innerHTML = "žádné spoje";
+      return;
+    }
+
+    let html = "";
+    j.departures.slice(0, 8).forEach(d => {
+      let line     = d.route.short_name;
+      let finalDir = d.trip.headsign;
+      let ts       = d.departure_timestamp.predicted || d.departure_timestamp.scheduled;
+      let dep      = new Date(ts);
+      let mins     = Math.round((dep - new Date()) / 60000);
+      if (mins < 0) mins = 0;
+
+      let delayMin = 0;
+      if (d.delay && d.delay.actual) {
+        delayMin = Math.round(d.delay.actual / 60);
+      }
+
+      let next      = d.next_stop?.stop_name || "";
+      let lineColor = delayMin > 3 ? "#ff4d4f" : "#ffffff";
+      let time      = dep.toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" });
+
+      html += `
+        <div class="line">
+          <span style="color:${lineColor};font-weight:600">${line}</span>
+          • ${next} (${mins}m) ${time} → ${finalDir}
+        </div>`;
+    });
+
+    document.getElementById(el).innerHTML = html;
+
+  } catch (e) {
+    document.getElementById(el).innerHTML = "PID chyba";
+  }
 }
 
-let html="";
-j.departures.slice(0,8).forEach(d=>{
-let line=d.route.short_name;
-let finalDir=d.trip.headsign;
-let ts=d.departure_timestamp.predicted||d.departure_timestamp.scheduled;
-let dep=new Date(ts);
-let mins=Math.round((dep-new Date())/60000);
-if(mins<0) mins=0;
-
-let delayMin=0;
-if(d.delay && d.delay.actual){
-delayMin=Math.round(d.delay.actual/60);
-}
-
-let next=d.next_stop?.stop_name || "";
-let lineColor = delayMin>3 ? "#ff4d4f" : "#ffffff";
-let time=dep.toLocaleTimeString("cs-CZ",{hour:"2-digit",minute:"2-digit"});
-
-html+=`
-<div class="line">
-<span style="color:${lineColor};font-weight:600">${line}</span>
- • ${next} (${mins}m) ${time} → ${finalDir}
-</div>
-`;
-});
-
-document.getElementById(el).innerHTML=html;
-
-}catch(e){
-document.getElementById(el).innerHTML="PID chyba";
-}
+// ===== REFRESH =====
+function refresh() {
+  if (cachedLat !== null) {
+    loadWeather(cachedLat, cachedLon);
+  }
+  stop("U303Z1P", "v");
+  stop("U325Z1P", "s");
+  stop("U125Z1P", "m");
 }
 
 // ===== INIT =====
-async function run(){
+function init() {
+  navigator.geolocation.getCurrentPosition(
+    async pos => {
+      cachedLat = pos.coords.latitude;
+      cachedLon = pos.coords.longitude;
 
-navigator.geolocation.getCurrentPosition(async pos=>{
-let lat=pos.coords.latitude;
-let lon=pos.coords.longitude;
+      try {
+        let geo = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${cachedLat}&lon=${cachedLon}`
+        );
+        let g = await geo.json();
+        document.getElementById("city").innerHTML =
+          g.address.city || g.address.town || g.address.village || "Moje poloha";
+      } catch (e) {
+        document.getElementById("city").innerHTML = "Moje poloha";
+      }
 
-let geo=await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
-let g=await geo.json();
-document.getElementById("city").innerHTML=
-g.address.city||g.address.town||g.address.village||"Moje poloha";
+      loadWeather(cachedLat, cachedLon);
+    },
+    () => {
+      cachedLat = 50.0755;
+      cachedLon = 14.4378;
+      document.getElementById("city").innerHTML = "Praha (fallback)";
+      loadWeather(cachedLat, cachedLon);
+    }
+  );
 
-loadWeather(lat,lon);
-});
-
-stop("U303Z1P","v");
-stop("U325Z1P","s");
-stop("U125Z1P","m");
+  stop("U303Z1P", "v");
+  stop("U325Z1P", "s");
+  stop("U125Z1P", "m");
 }
 
-run();
-setInterval(run,60000);
+init();
+setInterval(refresh, 60000);
 </script>
 
 </body>
