@@ -8,14 +8,14 @@
 <style>
 body{
 margin:0;
-font-family:-apple-system, BlinkMacSystemFont, system-ui;
+font-family:-apple-system,BlinkMacSystemFont,system-ui;
 background:#0b1220;
 color:white;
 }
 
 .wrap{
 padding:20px;
-max-width:500px;
+max-width:520px;
 margin:auto;
 }
 
@@ -28,7 +28,7 @@ box-shadow:0 10px 30px rgba(0,0,0,.35);
 }
 
 .big{
-font-size:34px;
+font-size:32px;
 font-weight:700;
 }
 
@@ -37,29 +37,22 @@ opacity:.9;
 margin-top:6px;
 }
 
-.stop{
-margin-top:10px;
-padding-top:10px;
-border-top:1px solid rgba(255,255,255,.08);
+.small{
+opacity:.6;
+font-size:12px;
+margin-top:6px;
 }
 
 .stopname{
 color:#7dd3fc;
 font-weight:700;
 font-size:18px;
-margin-bottom:6px;
+margin:16px 0 6px 0;
 }
 
 .line{
-font-size:15px;
-margin:2px 0;
-opacity:.95;
-}
-
-.small{
-opacity:.6;
-font-size:12px;
-margin-top:6px;
+font-size:14px;
+margin:3px 0;
 }
 </style>
 </head>
@@ -67,40 +60,56 @@ margin-top:6px;
 <body>
 <div class="wrap">
 
-<div class="card" id="weather">
-<div class="big" id="temp">Načítám…</div>
+<div class="card">
+<div class="big" id="city">Načítám…</div>
+<div class="big" id="temp"></div>
 <div class="row" id="meta"></div>
 <div class="row" id="sun"></div>
 <div class="small" id="forecast"></div>
 </div>
 
 <div class="card">
-<div class="stop">
 <div class="stopname">🚋 Veletržní palác</div>
 <div id="v">Načítám…</div>
-</div>
 
-<div class="stop">
 <div class="stopname">🚋 Strossmayerovo nám.</div>
 <div id="s">Načítám…</div>
-</div>
 </div>
 
 </div>
 
 <script>
-const GOLEMIO="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NDg0MCwiaWF0IjoxNzcxODA0NzA1LCJleHAiOjExNzcxODA0NzA1LCJpc3MiOiJnb2xlbWlvIiwianRpIjoiZDQzZDVlMDktNmVhZS00ZGQwLWEzMTAtMjI5YjZmZTQ4NmE0In0.5Wgnlm02CytmAfA-N6_-kXCyRhidvhcaQ7-XaO9GGsw"; // sem vlož api
+const GOLEMIO="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NDg0MCwiaWF0IjoxNzcxODA0NzA1LCJleHAiOjExNzcxODA0NzA1LCJpc3MiOiJnb2xlbWlvIiwianRpIjoiZDQzZDVlMDktNmVhZS00ZGQwLWEzMTAtMjI5YjZmZTQ4NmE0In0.5Wgnlm02CytmAfA-N6_-kXCyRhidvhcaQ7-XaO9GGsw";
 
-// ===== počasí =====
-async function loadWeather(){
-let lat=50.098;
-let lon=14.432;
+// ===== MĚSÍC =====
+function moonPhase(){
+const now=new Date();
+const synodic=29.53058867;
+const known=new Date(Date.UTC(2000,0,6,18,14,0));
+const days=(now-known)/86400000;
+let phase=(days%synodic)/synodic;
 
-let r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=temperature_2m,precipitation,windspeed_10m,apparent_temperature,uv_index&daily=sunrise,sunset&timezone=Europe%2FPrague`);
+if(phase<0) phase+=1;
+
+if(phase<0.03||phase>0.97) return "🌑 Nov";
+if(phase<0.22) return "🌒 Dorůstající srpek";
+if(phase<0.28) return "🌓 První čtvrť";
+if(phase<0.47) return "🌔 Dorůstající měsíc";
+if(phase<0.53) return "🌕 Úplněk";
+if(phase<0.72) return "🌖 Ubývající měsíc";
+if(phase<0.78) return "🌗 Poslední čtvrť";
+return "🌘 Ubývající srpek";
+}
+
+// ===== POČASÍ =====
+async function loadWeather(lat,lon){
+let r=await fetch(
+`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=temperature_2m,precipitation,windspeed_10m,apparent_temperature,uv_index&daily=sunrise,sunset&timezone=Europe%2FPrague`
+);
 let j=await r.json();
 
 document.getElementById("temp").innerHTML=
-`${j.current_weather.temperature}° <span style="opacity:.6;font-size:22px">(${Math.round(j.hourly.apparent_temperature[0])}°)</span>`;
+`${j.current_weather.temperature}° <span style="opacity:.6;font-size:20px">(${Math.round(j.hourly.apparent_temperature[j.hourly.temperature_2m.indexOf(j.current_weather.temperature)])}°)</span>`;
 
 document.getElementById("meta").innerHTML=
 `🌧 ${j.hourly.precipitation[0]}mm &nbsp; 💨 ${j.current_weather.windspeed}km/h &nbsp; UV ${j.hourly.uv_index[0]}`;
@@ -109,20 +118,26 @@ let sunrise=j.daily.sunrise[0].substring(11,16);
 let sunset=j.daily.sunset[0].substring(11,16);
 
 document.getElementById("sun").innerHTML=
-`☀️ ${sunrise} &nbsp; 🌇 ${sunset}`;
+`☀️ ${sunrise} &nbsp; 🌇 ${sunset} &nbsp; ${moonPhase()}`;
 
-let f="";
-for(let i=1;i<6;i++){
+// najít aktuální hodinu
+let nowHour=new Date().getHours();
+let forecast="";
+for(let i=0;i<j.hourly.time.length;i++){
+let hour=parseInt(j.hourly.time[i].substring(11,13));
+if(hour>=nowHour){
 let h=j.hourly.time[i].substring(11,16);
 let t=j.hourly.temperature_2m[i];
 let r=j.hourly.precipitation[i];
-f+=`${h} ${t}° ${r}mm &nbsp; `;
+forecast+=`${h} ${t}° ${r}mm &nbsp; `;
+if(forecast.split("&nbsp;").length>5) break;
 }
-document.getElementById("forecast").innerHTML=f;
+}
+document.getElementById("forecast").innerHTML=forecast;
 }
 
 // ===== PID =====
-async function stop(name,id,el){
+async function stop(id,el){
 try{
 let r=await fetch(`https://api.golemio.cz/v2/pid/departureboards?ids=${id}&limit=12`,{
 headers:{"x-access-token":GOLEMIO}
@@ -153,14 +168,30 @@ html+=`<div class="line">${t} (${mins}m) ${line} → ${dir}${delay}</div>`;
 document.getElementById(el).innerHTML=html;
 
 }catch(e){
-document.getElementById(el).innerHTML="nelze načíst";
+document.getElementById(el).innerHTML="PID chyba";
 }
 }
 
+// ===== INIT =====
 async function run(){
-loadWeather();
-stop("Veletržní","U303Z1P","v");
-stop("Stross","U325Z1P","s");
+
+navigator.geolocation.getCurrentPosition(async pos=>{
+
+let lat=pos.coords.latitude;
+let lon=pos.coords.longitude;
+
+// město
+let geo=await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
+let g=await geo.json();
+document.getElementById("city").innerHTML=
+g.address.city||g.address.town||g.address.village||"Moje poloha";
+
+loadWeather(lat,lon);
+
+});
+
+stop("U303Z1P","v");
+stop("U325Z1P","s");
 }
 
 run();
