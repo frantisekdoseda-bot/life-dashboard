@@ -51,27 +51,38 @@ body{
 </div>
 
 <script>
-const GOLEMIO = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NDg0MCwiaWF0IjoxNzcxODA0NzA1LCJleHAiOjExNzcxODA0NzA1LCJpc3MiOiJnb2xlbWlvIiwianRpIjoiZDQzZDVlMDktNmVhZS00ZGQwLWEzMTAtMjI5YjZmZTQ4NmE0In0.5Wgnlm02CytmAfA-N6_-kXCyRhidvhcaQ7-XaO9GGsw";
+const GOLEMIO = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NDg0MCwiaWF0IjoxNzcxODA0NzA1LCJleHAiOjExNzcxODA0NzA1LCJpc3MiOiJnb2xlbWlvIiwianRpIjoiZDQzZDVlMDktNmVhZS00ZGQwLWEzMTAtMjI5YjZmZTQ4NmE0In0.5Wgnlm02CytmAfA-N6_-kXCyRhidvhcaQ7-XaO9GGsw
+";
 
 let cachedLat = null;
 let cachedLon = null;
 
 // ===== WMO WEATHERCODE → EMOJI =====
 function weatherEmoji(code) {
-  if (code === 0)                          return "☀️";    // jasno
-  if (code === 1)                          return "🌤️";   // skoro jasno
-  if (code === 2)                          return "⛅";    // polojasno
-  if (code === 3)                          return "☁️";    // zataženo
-  if (code >= 45 && code <= 48)            return "🌫️";   // mlha
-  if (code >= 51 && code <= 55)            return "🌦️";   // mrholení
-  if (code >= 56 && code <= 57)            return "🌨️";   // mrznoucí mrholení
-  if (code >= 61 && code <= 65)            return "🌧️";   // déšť
-  if (code >= 66 && code <= 67)            return "🌨️";   // mrznoucí déšť
-  if (code >= 71 && code <= 77)            return "🌨️";   // sníh
-  if (code >= 80 && code <= 82)            return "🌧️";   // přeháňky
-  if (code >= 85 && code <= 86)            return "🌨️";   // sněhové přeháňky
-  if (code >= 95 && code <= 99)            return "🌩️";   // bouřka
+  if (code === 0)                return "☀️";
+  if (code === 1)                return "🌤️";
+  if (code === 2)                return "⛅";
+  if (code === 3)                return "☁️";
+  if (code >= 45 && code <= 48)  return "🌫️";
+  if (code >= 51 && code <= 55)  return "🌦️";
+  if (code >= 56 && code <= 57)  return "🌨️";
+  if (code >= 61 && code <= 65)  return "🌧️";
+  if (code >= 66 && code <= 67)  return "🌨️";
+  if (code >= 71 && code <= 77)  return "🌨️";
+  if (code >= 80 && code <= 82)  return "🌧️";
+  if (code >= 85 && code <= 86)  return "🌨️";
+  if (code >= 95 && code <= 99)  return "🌩️";
   return "🌤️";
+}
+
+// ===== AQI → EMOJI + POPIS =====
+function aqiLabel(aqi) {
+  if (aqi <= 20)  return "🟢 Výborný";
+  if (aqi <= 40)  return "🟡 Dobrý";
+  if (aqi <= 60)  return "🟠 Střední";
+  if (aqi <= 80)  return "🔴 Špatný";
+  if (aqi <= 100) return "🟣 Velmi špatný";
+  return "⚫ Nebezpečný";
 }
 
 // ===== PŘESNÁ FÁZE MĚSÍCE =====
@@ -84,22 +95,25 @@ function moonPhase() {
   let age = (jd - knownNewMoon) % synodic;
   if (age < 0) age += synodic;
 
-  if (age < 1.84566)  return "🌑 Nov";
-  if (age < 5.53699)  return "🌒 Dorůstající srpek";
-  if (age < 9.22831)  return "🌓 První čtvrť";
-  if (age < 12.91963) return "🌔 Dorůstající měsíc";
-  if (age < 16.61096) return "🌕 Úplněk";
-  if (age < 20.30228) return "🌖 Ubývající měsíc";
-  if (age < 23.99361) return "🌗 Poslední čtvrť";
-  if (age < 27.68493) return "🌘 Ubývající srpek";
-  return "🌑 Nov";
+  const q = synodic / 4;
+  const w = 0.5; // ±0.5 dne pro hlavní fáze
+
+  if (age < w || age > synodic - w)  return "🌑 Nov";
+  if (Math.abs(age - q) < w)        return "🌓 První čtvrť";
+  if (Math.abs(age - 2 * q) < w)    return "🌕 Úplněk";
+  if (Math.abs(age - 3 * q) < w)    return "🌗 Poslední čtvrť";
+
+  if (age < q)     return "🌒 Dorůstající srpek";
+  if (age < 2 * q) return "🌔 Dorůstající měsíc";
+  if (age < 3 * q) return "🌖 Ubývající měsíc";
+  return "🌘 Ubývající srpek";
 }
 
 // ===== POČASÍ =====
 async function loadWeather(lat, lon) {
   try {
     let r = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=temperature_2m,precipitation,apparent_temperature,uv_index,windspeed_10m,weathercode&daily=sunrise,sunset&timezone=Europe%2FPrague`
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=temperature_2m,precipitation,apparent_temperature,uv_index,windspeed_10m,weathercode&daily=sunrise,sunset,uv_index_max&timezone=Europe%2FPrague`
     );
     let j = await r.json();
 
@@ -114,8 +128,13 @@ async function loadWeather(lat, lon) {
     document.getElementById("temp").innerHTML =
       `${weatherEmoji(wCode)} ${temp}° <span style="opacity:.6;font-size:20px">(${feel}°)</span>`;
 
+    let uvVal = Math.round(j.hourly.uv_index[index]);
+    // Pokud je hodinový UV 0, zkusíme denní max jako fallback info
+    let uvMax = Math.round(j.daily.uv_index_max[0]);
+    let uvText = uvVal > 0 ? `UV ${uvVal}` : `UV ${uvVal} (max ${uvMax})`;
+
     document.getElementById("meta").innerHTML =
-      `🌧️ ${Math.round(j.hourly.precipitation[index])}mm &nbsp; 🌪️ ${Math.round(j.hourly.windspeed_10m[index])}km/h &nbsp; UV ${Math.round(j.hourly.uv_index[index])}`;
+      `🌧️ ${Math.round(j.hourly.precipitation[index])}mm &nbsp; 🌪️ ${Math.round(j.hourly.windspeed_10m[index])}km/h &nbsp; ${uvText}`;
 
     let sunrise = j.daily.sunrise[0].substring(11, 16);
     let sunset  = j.daily.sunset[0].substring(11, 16);
@@ -140,6 +159,31 @@ async function loadWeather(lat, lon) {
 
   } catch (e) {
     document.getElementById("temp").innerHTML = "Chyba počasí";
+  }
+}
+
+// ===== KVALITA OVZDUŠÍ =====
+async function loadAirQuality(lat, lon) {
+  try {
+    let r = await fetch(
+      `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&hourly=european_aqi,pm10,pm2_5&timezone=Europe%2FPrague`
+    );
+    let j = await r.json();
+
+    let now = new Date();
+    let index = j.hourly.time.findIndex(t => new Date(t) >= now);
+    if (index < 0) index = j.hourly.time.length - 1;
+
+    let aqi  = Math.round(j.hourly.european_aqi[index] || 0);
+    let pm25 = Math.round(j.hourly.pm2_5[index] || 0);
+    let pm10 = Math.round(j.hourly.pm10[index] || 0);
+
+    // Přidáme za řádek se sluncem/měsícem
+    let sunEl = document.getElementById("sun");
+    sunEl.innerHTML += `<br>🌬️ ${aqiLabel(aqi)} (AQI ${aqi}) &nbsp; PM2.5: ${pm25} &nbsp; PM10: ${pm10}`;
+
+  } catch (e) {
+    // Tiše selže – není kritické
   }
 }
 
@@ -192,6 +236,7 @@ async function stop(id, el) {
 function refresh() {
   if (cachedLat !== null) {
     loadWeather(cachedLat, cachedLon);
+    loadAirQuality(cachedLat, cachedLon);
   }
   stop("U303Z1P", "v");
   stop("U325Z1P", "s");
@@ -217,12 +262,14 @@ function init() {
       }
 
       loadWeather(cachedLat, cachedLon);
+      loadAirQuality(cachedLat, cachedLon);
     },
     () => {
       cachedLat = 50.0755;
       cachedLon = 14.4378;
       document.getElementById("city").innerHTML = "Praha (fallback)";
       loadWeather(cachedLat, cachedLon);
+      loadAirQuality(cachedLat, cachedLon);
     }
   );
 
