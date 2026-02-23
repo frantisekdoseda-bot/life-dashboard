@@ -12,36 +12,17 @@ font-family:-apple-system,BlinkMacSystemFont,system-ui;
 background:#0b1220;
 color:white;
 }
-
-.wrap{
-padding:18px;
-max-width:520px;
-margin:auto;
-}
-
+.wrap{padding:18px;max-width:520px;margin:auto;}
 .card{
 background:linear-gradient(180deg,#0f1b35,#0b1220);
-padding:20px;
-border-radius:24px;
-margin-bottom:16px;
+padding:20px;border-radius:24px;margin-bottom:16px;
 box-shadow:0 10px 30px rgba(0,0,0,.35);
 }
-
 .big{font-size:30px;font-weight:700;}
 .row{opacity:.9;margin-top:6px;}
 .small{opacity:.65;font-size:12px;margin-top:6px;}
-
-.stopname{
-color:#7dd3fc;
-font-weight:700;
-font-size:17px;
-margin:14px 0 6px 0;
-}
-
-.line{
-font-size:14px;
-margin:3px 0;
-}
+.stopname{color:#7dd3fc;font-weight:700;font-size:17px;margin:14px 0 6px 0;}
+.line{font-size:14px;margin:3px 0;}
 </style>
 </head>
 
@@ -72,38 +53,35 @@ margin:3px 0;
 <script>
 const GOLEMIO="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NDg0MCwiaWF0IjoxNzcxODA0NzA1LCJleHAiOjExNzcxODA0NzA1LCJpc3MiOiJnb2xlbWlvIiwianRpIjoiZDQzZDVlMDktNmVhZS00ZGQwLWEzMTAtMjI5YjZmZTQ4NmE0In0.5Wgnlm02CytmAfA-N6_-kXCyRhidvhcaQ7-XaO9GGsw";
 
-// ===== měsíc =====
+// ===== SPRÁVNÝ MĚSÍC =====
 function moonPhase(){
-const now=new Date();
-const synodic=29.53058867;
-const known=new Date(Date.UTC(2000,0,6,18,14,0));
-const days=(now-known)/86400000;
-let phase=(days%synodic)/synodic;
-if(phase<0) phase+=1;
+const now = new Date();
+const lp = 2551443;
+const new_moon = new Date(1970,0,7,20,35,0);
+const phase = ((now-new_moon)/1000)%lp;
+const age = phase/lp;
 
-if(phase<0.03||phase>0.97) return "🌑 Nov";
-if(phase<0.22) return "🌒 Dorůstající srpek";
-if(phase<0.28) return "🌓 První čtvrť";
-if(phase<0.47) return "🌔 Dorůstající měsíc";
-if(phase<0.53) return "🌕 Úplněk";
-if(phase<0.72) return "🌖 Ubývající měsíc";
-if(phase<0.78) return "🌗 Poslední čtvrť";
+if(age<0.03||age>0.97) return "🌑 Nov";
+if(age<0.25) return "🌒 Dorůstající srpek";
+if(age<0.27) return "🌓 První čtvrť";
+if(age<0.48) return "🌔 Dorůstající měsíc";
+if(age<0.52) return "🌕 Úplněk";
+if(age<0.73) return "🌖 Ubývající měsíc";
+if(age<0.77) return "🌗 Poslední čtvrť";
 return "🌘 Ubývající srpek";
 }
 
-// ===== počasí =====
+// ===== POČASÍ =====
 async function loadWeather(lat,lon){
 
 let r=await fetch(
 `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=temperature_2m,precipitation,apparent_temperature,uv_index,windspeed_10m&daily=sunrise,sunset&timezone=Europe%2FPrague`
 );
-
 let j=await r.json();
 
 // aktuální index hodiny
 let now=new Date();
-let nowISO=now.toISOString().slice(0,13);
-let index=j.hourly.time.findIndex(t=>t.startsWith(nowISO));
+let index=j.hourly.time.findIndex(t=> new Date(t) > now);
 if(index<0) index=0;
 
 let temp=Math.round(j.current_weather.temperature);
@@ -121,9 +99,9 @@ let sunset=j.daily.sunset[0].substring(11,16);
 document.getElementById("sun").innerHTML=
 `☀️ ${sunrise} &nbsp; 🌇 ${sunset} &nbsp; ${moonPhase()}`;
 
-// forecast 5h dopředu
+// forecast 5h dopředu OD BUDOUCÍ HODINY
 let forecast="";
-for(let i=1;i<=5;i++){
+for(let i=0;i<5;i++){
 let idx=index+i;
 if(!j.hourly.time[idx]) break;
 
@@ -153,13 +131,10 @@ return;
 let html="";
 
 j.departures.slice(0,8).forEach(d=>{
-
 let line=d.route.short_name;
 let finalDir=d.trip.headsign;
-
 let ts=d.departure_timestamp.predicted||d.departure_timestamp.scheduled;
 let dep=new Date(ts);
-
 let mins=Math.round((dep-new Date())/60000);
 if(mins<0) mins=0;
 
@@ -187,17 +162,15 @@ document.getElementById(el).innerHTML="PID chyba";
 }
 }
 
-// ===== init =====
+// ===== INIT =====
 async function run(){
 
 navigator.geolocation.getCurrentPosition(async pos=>{
-
 let lat=pos.coords.latitude;
 let lon=pos.coords.longitude;
 
 let geo=await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
 let g=await geo.json();
-
 document.getElementById("city").innerHTML=
 g.address.city||g.address.town||g.address.village||"Moje poloha";
 
@@ -206,7 +179,7 @@ loadWeather(lat,lon);
 
 stop("U303Z1P","v");
 stop("U325Z1P","s");
-stop("U125Z1P","m"); // Václavák Můstek tram
+stop("U125Z1P","m");
 }
 
 run();
