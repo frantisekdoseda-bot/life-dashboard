@@ -53,28 +53,35 @@ box-shadow:0 10px 30px rgba(0,0,0,.35);
 <script>
 const GOLEMIO="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NDg0MCwiaWF0IjoxNzcxODA0NzA1LCJleHAiOjExNzcxODA0NzA1LCJpc3MiOiJnb2xlbWlvIiwianRpIjoiZDQzZDVlMDktNmVhZS00ZGQwLWEzMTAtMjI5YjZmZTQ4NmE0In0.5Wgnlm02CytmAfA-N6_-kXCyRhidvhcaQ7-XaO9GGsw";
 
-// ===== SPRÁVNÝ MĚSÍC =====
+// ===== PŘESNÁ FÁZE MĚSÍCE =====
 function moonPhase(){
+
 const now = new Date();
 
-// přesný synodický měsíc
-const synodic = 29.53058867;
-const knownNewMoon = new Date(Date.UTC(2000,0,6,18,14,0));
+// převod na juliánské datum
+const jd = now / 86400000 + 2440587.5;
 
-let days = (now - knownNewMoon) / 86400000;
-let phase = (days % synodic) / synodic;
+// referenční nov
+const knownNewMoon = 2451550.1;
 
-if (phase < 0) phase += 1;
+// synodický měsíc
+const synodic = 29.530588853;
 
-// správné pořadí fází
-if (phase < 0.03 || phase > 0.97) return "🌑 Nov";
-if (phase < 0.22) return "🌒 Dorůstající srpek";
-if (phase < 0.28) return "🌓 První čtvrť";
-if (phase < 0.47) return "🌔 Dorůstající měsíc";
-if (phase < 0.53) return "🌕 Úplněk";
-if (phase < 0.72) return "🌖 Ubývající měsíc";
-if (phase < 0.78) return "🌗 Poslední čtvrť";
-return "🌘 Ubývající srpek";
+// stáří měsíce
+let age = (jd - knownNewMoon) % synodic;
+if (age < 0) age += synodic;
+
+// mapování
+if (age < 1.84566) return "🌑 Nov";
+if (age < 5.53699) return "🌒 Dorůstající srpek";
+if (age < 9.22831) return "🌓 První čtvrť";
+if (age < 12.91963) return "🌔 Dorůstající měsíc";
+if (age < 16.61096) return "🌕 Úplněk";
+if (age < 20.30228) return "🌖 Ubývající měsíc";
+if (age < 23.99361) return "🌗 Poslední čtvrť";
+if (age < 27.68493) return "🌘 Ubývající srpek";
+
+return "🌑 Nov";
 }
 
 // ===== POČASÍ =====
@@ -83,9 +90,9 @@ async function loadWeather(lat,lon){
 let r=await fetch(
 `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=temperature_2m,precipitation,apparent_temperature,uv_index,windspeed_10m&daily=sunrise,sunset&timezone=Europe%2FPrague`
 );
+
 let j=await r.json();
 
-// aktuální index hodiny
 let now=new Date();
 let index=j.hourly.time.findIndex(t=> new Date(t) > now);
 if(index<0) index=0;
@@ -105,7 +112,7 @@ let sunset=j.daily.sunset[0].substring(11,16);
 document.getElementById("sun").innerHTML=
 `☀️ ${sunrise} &nbsp; 🌇 ${sunset} &nbsp; ${moonPhase()}`;
 
-// forecast 5h dopředu OD BUDOUCÍ HODINY
+// forecast dalších 5 hodin
 let forecast="";
 for(let i=0;i<5;i++){
 let idx=index+i;
@@ -117,7 +124,6 @@ let r=Math.round(j.hourly.precipitation[idx]);
 
 forecast+=`${h} ${t}° ${r}mm &nbsp; `;
 }
-
 document.getElementById("forecast").innerHTML=forecast;
 }
 
@@ -135,7 +141,6 @@ return;
 }
 
 let html="";
-
 j.departures.slice(0,8).forEach(d=>{
 let line=d.route.short_name;
 let finalDir=d.trip.headsign;
