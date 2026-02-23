@@ -3,136 +3,168 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard</title>
+<title>Life Dashboard</title>
 
 <style>
 body{
-background:#0b0f14;
-color:#e5e7eb;
-font-family:system-ui;
 margin:0;
-padding:18px;
+font-family:-apple-system, BlinkMacSystemFont, system-ui;
+background:#0b1220;
+color:white;
 }
+
+.wrap{
+padding:20px;
+max-width:500px;
+margin:auto;
+}
+
 .card{
-background:#111827;
-border-radius:18px;
-padding:18px;
-margin-bottom:16px;
-box-shadow:0 0 20px rgba(0,0,0,.4);
+background:linear-gradient(180deg,#0f1b35,#0b1220);
+padding:22px;
+border-radius:26px;
+margin-bottom:18px;
+box-shadow:0 10px 30px rgba(0,0,0,.35);
 }
-.title{
-opacity:.6;
-font-size:13px;
-margin-bottom:6px;
-}
+
 .big{
 font-size:34px;
 font-weight:700;
 }
+
 .row{
-display:flex;
-justify-content:space-between;
+opacity:.9;
 margin-top:6px;
-font-size:15px;
 }
-hr{
-border:none;
-border-top:1px solid #222;
-margin:10px 0;
+
+.stop{
+margin-top:10px;
+padding-top:10px;
+border-top:1px solid rgba(255,255,255,.08);
+}
+
+.stopname{
+color:#7dd3fc;
+font-weight:700;
+font-size:18px;
+margin-bottom:6px;
+}
+
+.line{
+font-size:15px;
+margin:2px 0;
+opacity:.95;
+}
+
+.small{
+opacity:.6;
+font-size:12px;
+margin-top:6px;
 }
 </style>
 </head>
 
 <body>
+<div class="wrap">
 
-<div class="card">
-<div class="title">POČASÍ</div>
+<div class="card" id="weather">
 <div class="big" id="temp">Načítám…</div>
-<div id="desc"></div>
-<div class="row"><span>UV</span><span id="uv">-</span></div>
-<div class="row"><span>Déšť</span><span id="rain">-</span></div>
-<div class="row"><span>Měsíc</span><span id="moon">-</span></div>
-<hr>
-<div class="row"><span>Východ</span><span id="sunrise">-</span></div>
-<div class="row"><span>Západ</span><span id="sunset">-</span></div>
+<div class="row" id="meta"></div>
+<div class="row" id="sun"></div>
+<div class="small" id="forecast"></div>
 </div>
 
 <div class="card">
-<div class="title">VELETRŽNÍ PALÁC</div>
-<div id="veletrzni">Načítám…</div>
+<div class="stop">
+<div class="stopname">🚋 Veletržní palác</div>
+<div id="v">Načítám…</div>
 </div>
 
-<div class="card">
-<div class="title">STROSSMAYEROVO NÁM</div>
-<div id="stross">Načítám…</div>
+<div class="stop">
+<div class="stopname">🚋 Strossmayerovo nám.</div>
+<div id="s">Načítám…</div>
+</div>
+</div>
+
 </div>
 
 <script>
+const GOLEMIO="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NDg0MCwiaWF0IjoxNzcxODA0NzA1LCJleHAiOjExNzcxODA0NzA1LCJpc3MiOiJnb2xlbWlvIiwianRpIjoiZDQzZDVlMDktNmVhZS00ZGQwLWEzMTAtMjI5YjZmZTQ4NmE0In0.5Wgnlm02CytmAfA-N6_-kXCyRhidvhcaQ7-XaO9GGsw"; // sem vlož api
 
-// ---------- POČASÍ ----------
-async function loadWeather(lat,lon){
-let url=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&daily=sunrise,sunset,uv_index_max,precipitation_sum&timezone=auto`;
+// ===== počasí =====
+async function loadWeather(){
+let lat=50.098;
+let lon=14.432;
 
-let r=await fetch(url);
+let r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=temperature_2m,precipitation,windspeed_10m,apparent_temperature,uv_index&daily=sunrise,sunset&timezone=Europe%2FPrague`);
 let j=await r.json();
 
-document.getElementById("temp").innerText=j.current_weather.temperature+"°C";
-document.getElementById("uv").innerText=j.daily.uv_index_max[0];
-document.getElementById("rain").innerText=j.daily.precipitation_sum[0]+" mm";
-document.getElementById("sunrise").innerText=j.daily.sunrise[0].split("T")[1].slice(0,5);
-document.getElementById("sunset").innerText=j.daily.sunset[0].split("T")[1].slice(0,5);
+document.getElementById("temp").innerHTML=
+`${j.current_weather.temperature}° <span style="opacity:.6;font-size:22px">(${Math.round(j.hourly.apparent_temperature[0])}°)</span>`;
 
-// fáze měsíce
-let moon=Math.floor((Date.now()/1000/86400)%29.53);
-let phase="🌑";
-if(moon<7) phase="🌒";
-else if(moon<15) phase="🌕";
-else if(moon<22) phase="🌖";
-else phase="🌘";
-document.getElementById("moon").innerText=phase;
+document.getElementById("meta").innerHTML=
+`🌧 ${j.hourly.precipitation[0]}mm &nbsp; 💨 ${j.current_weather.windspeed}km/h &nbsp; UV ${j.hourly.uv_index[0]}`;
+
+let sunrise=j.daily.sunrise[0].substring(11,16);
+let sunset=j.daily.sunset[0].substring(11,16);
+
+document.getElementById("sun").innerHTML=
+`☀️ ${sunrise} &nbsp; 🌇 ${sunset}`;
+
+let f="";
+for(let i=1;i<6;i++){
+let h=j.hourly.time[i].substring(11,16);
+let t=j.hourly.temperature_2m[i];
+let r=j.hourly.precipitation[i];
+f+=`${h} ${t}° ${r}mm &nbsp; `;
+}
+document.getElementById("forecast").innerHTML=f;
 }
 
-// ---------- MHD ----------
-async function loadStop(name,el){
+// ===== PID =====
+async function stop(name,id,el){
 try{
-let r=await fetch(`https://api.golemio.cz/v2/pid/departureboards?names[]=${encodeURIComponent(name)}&limit=5`,{
-headers:{"x-access-token":"public-demo"}
+let r=await fetch(`https://api.golemio.cz/v2/pid/departureboards?ids=${id}&limit=12`,{
+headers:{"x-access-token":GOLEMIO}
 });
 let j=await r.json();
+
+if(!j.departures||j.departures.length==0){
+document.getElementById(el).innerHTML="žádné spoje";
+return;
+}
 
 let html="";
-j.departures.slice(0,5).forEach(d=>{
-let t=d.departure_timestamp.predicted.substring(11,16);
-html+=`<div class="row"><b>${d.route.short_name}</b><span>${d.trip.headsign} • ${t}</span></div>`;
+j.departures.slice(0,8).forEach(d=>{
+let line=d.route.short_name;
+let dir=d.trip.headsign;
+let ts=d.departure_timestamp.predicted||d.departure_timestamp.scheduled;
+let t=new Date(ts).toLocaleTimeString("cs-CZ",{hour:"2-digit",minute:"2-digit"});
+let mins=Math.round((new Date(ts)-new Date())/60000);
+
+let delay="";
+if(d.delay && d.delay.actual>60){
+delay=` +${Math.round(d.delay.actual/60)}m`;
+}
+
+html+=`<div class="line">${t} (${mins}m) ${line} → ${dir}${delay}</div>`;
 });
+
 document.getElementById(el).innerHTML=html;
 
-}catch{
-document.getElementById(el).innerText="nelze načíst";
+}catch(e){
+document.getElementById(el).innerHTML="nelze načíst";
 }
 }
 
-function loadMHD(){
-loadStop("Veletržní palác","veletrzni");
-loadStop("Strossmayerovo náměstí","stross");
+async function run(){
+loadWeather();
+stop("Veletržní","U303Z1P","v");
+stop("Stross","U325Z1P","s");
 }
 
-// ---------- GEO ----------
-navigator.geolocation.getCurrentPosition(pos=>{
-let lat=pos.coords.latitude;
-let lon=pos.coords.longitude;
-loadWeather(lat,lon);
-});
-
-// refresh
-loadMHD();
-setInterval(loadMHD,60000);
-setInterval(()=>{
-navigator.geolocation.getCurrentPosition(pos=>{
-loadWeather(pos.coords.latitude,pos.coords.longitude);
-});
-},900000);
-
+run();
+setInterval(run,60000);
 </script>
 
 </body>
