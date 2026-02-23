@@ -45,7 +45,7 @@ body{
     <div class="stopname">🚋 Strossmayerovo nám.</div>
     <div id="s">Načítám…</div>
 
-    <div class="stopname">🚋 Václavské nám. (Můstek)</div>
+    <div class="stopname">🚋 Václavské nám.</div>
     <div id="m">Načítám…</div>
   </div>
 
@@ -57,13 +57,9 @@ const GOLEMIO = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NDg0MCwiaWF0IjoxNz
 let cachedLat = null;
 let cachedLon = null;
 
-// Tramvajové linky: 1-99 (denní 1-26, výlukové 30-39, noční 91-99)
-function isTram(lineNumber) {
-  let n = parseInt(lineNumber);
-  return !isNaN(n) && n >= 1 && n <= 99;
-}
+// Cache nalezených stop IDs (aby se nemusely hledat pokaždé)
+let stopIdCache = {};
 
-// ===== WMO WEATHERCODE → EMOJI =====
 function weatherEmoji(code) {
   if (code === 0)                return "☀️";
   if (code === 1)                return "🌤️";
@@ -81,7 +77,6 @@ function weatherEmoji(code) {
   return "🌤️";
 }
 
-// ===== AQI → EMOJI + POPIS =====
 function aqiLabel(aqi) {
   if (aqi <= 20)  return "🟢 Výborný";
   if (aqi <= 40)  return "🟡 Dobrý";
@@ -91,38 +86,31 @@ function aqiLabel(aqi) {
   return "⚫ Nebezpečný";
 }
 
-// ===== PŘESNÁ FÁZE MĚSÍCE =====
 function moonPhase() {
   const now = new Date();
   const jd = now.getTime() / 86400000 + 2440587.5;
   const knownNewMoon = 2451550.1;
   const synodic = 29.530588853;
-
   let age = (jd - knownNewMoon) % synodic;
   if (age < 0) age += synodic;
-
   const q = synodic / 4;
   const w = 0.5;
-
   if (age < w || age > synodic - w)  return "🌑 Nov";
   if (Math.abs(age - q) < w)        return "🌓 První čtvrť";
   if (Math.abs(age - 2 * q) < w)    return "🌕 Úplněk";
   if (Math.abs(age - 3 * q) < w)    return "🌗 Poslední čtvrť";
-
   if (age < q)     return "🌒 Dorůstající srpek";
   if (age < 2 * q) return "🌔 Dorůstající měsíc";
   if (age < 3 * q) return "🌖 Ubývající měsíc";
   return "🌘 Ubývající srpek";
 }
 
-// ===== POČASÍ =====
 async function loadWeather(lat, lon) {
   try {
     let r = await fetch(
       `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=temperature_2m,precipitation,apparent_temperature,uv_index,windspeed_10m,weathercode&daily=sunrise,sunset,uv_index_max&timezone=Europe%2FPrague`
     );
     let j = await r.json();
-
     let now = new Date();
     let index = j.hourly.time.findIndex(t => new Date(t) >= now);
     if (index < 0) index = j.hourly.time.length - 1;
@@ -134,7 +122,6 @@ async function loadWeather(lat, lon) {
     document.getElementById("temp").innerHTML =
       `${weatherEmoji(wCode)} ${temp}° <span style="opacity:.6;font-size:20px">(${feel}°)</span>`;
 
-    // UV: hodinový, pokud je 0 a denní max > 0 → vezmi denní max
     let uvHourly = j.hourly.uv_index[index] || 0;
     let uvMax    = j.daily.uv_index_max[0] || 0;
     let uvVal    = Math.round(uvHourly > 0 ? uvHourly : uvMax);
@@ -159,80 +146,110 @@ async function loadWeather(lat, lon) {
       forecast += `${h} ${weatherEmoji(hCode)} ${t}° ${precip}mm &nbsp; `;
     }
     document.getElementById("forecast").innerHTML = forecast;
-
   } catch (e) {
     document.getElementById("temp").innerHTML = "Chyba počasí";
   }
 }
 
-// ===== KVALITA OVZDUŠÍ =====
 async function loadAirQuality(lat, lon) {
   try {
     let r = await fetch(
       `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&hourly=european_aqi,pm10,pm2_5&timezone=Europe%2FPrague`
     );
     let j = await r.json();
-
     let now = new Date();
     let index = j.hourly.time.findIndex(t => new Date(t) >= now);
     if (index < 0) index = j.hourly.time.length - 1;
-
     let aqi  = Math.round(j.hourly.european_aqi[index] || 0);
     let pm25 = Math.round(j.hourly.pm2_5[index] || 0);
     let pm10 = Math.round(j.hourly.pm10[index] || 0);
-
     document.getElementById("air").innerHTML =
       `🌬️ ${aqiLabel(aqi)} (AQI ${aqi}) &nbsp; PM2.5: ${pm25} &nbsp; PM10: ${pm10}`;
   } catch (e) {}
 }
 
-// ===== PID =====
-// Volá API pro každý sloupek zvlášť, merguje a řadí výsledky
-async function loadStop(ids, el) {
+// ===== PID: Najdi stop IDs podle jména přes GTFS stops API =====
+async function findStopIds(stopName) {
+  if (stopIdCache[stopName]) return stopIdCache[stopName];
   try {
-    let allDepartures = [];
-
-    // Volej pro každý sloupek zvlášť (spolehlivější než ids[])
-    for (let id of ids) {
-      try {
-        let r = await fetch(
-          `https://api.golemio.cz/v2/pid/departureboards?ids=${id}&limit=15`,
-          { headers: { "x-access-token": GOLEMIO } }
-        );
-        let j = await r.json();
-        if (j.departures) {
-          allDepartures = allDepartures.concat(j.departures);
+    let r = await fetch(
+      `https://api.golemio.cz/v2/gtfs/stops?names[]=${encodeURIComponent(stopName)}`,
+      { headers: { "x-access-token": GOLEMIO } }
+    );
+    let j = await r.json();
+    let ids = [];
+    if (j.features) {
+      j.features.forEach(f => {
+        if (f.properties && f.properties.stop_id) {
+          ids.push(f.properties.stop_id);
         }
-      } catch (e) {}
+      });
+    } else if (Array.isArray(j)) {
+      j.forEach(s => {
+        if (s.stop_id) ids.push(s.stop_id);
+      });
+    }
+    stopIdCache[stopName] = ids;
+    return ids;
+  } catch (e) {
+    return [];
+  }
+}
+
+// ===== PID: Odjezdy podle názvu zastávky =====
+async function loadStop(stopName, el) {
+  try {
+    // Zkusíme přímo names[] parametr v departureboard API
+    let r = await fetch(
+      `https://api.golemio.cz/v2/pid/departureboards?names[]=${encodeURIComponent(stopName)}&limit=15`,
+      { headers: { "x-access-token": GOLEMIO } }
+    );
+    let j = await r.json();
+
+    // Pokud names[] nefunguje, fallback na nalezená IDs
+    if (!j.departures || j.departures.length === 0) {
+      let ids = await findStopIds(stopName);
+      if (ids.length === 0) {
+        document.getElementById(el).innerHTML = "Zastávka nenalezena";
+        return;
+      }
+      // Volej pro každé ID
+      let allDepartures = [];
+      for (let id of ids) {
+        try {
+          let r2 = await fetch(
+            `https://api.golemio.cz/v2/pid/departureboards?ids=${id}&limit=10`,
+            { headers: { "x-access-token": GOLEMIO } }
+          );
+          let j2 = await r2.json();
+          if (j2.departures) allDepartures = allDepartures.concat(j2.departures);
+        } catch (e) {}
+      }
+      j = { departures: allDepartures };
     }
 
-    // Filtruj jen tramvaje (čísla 1-99)
-    allDepartures = allDepartures.filter(d => isTram(d.route.short_name));
-
-    if (allDepartures.length === 0) {
+    if (!j.departures || j.departures.length === 0) {
       document.getElementById(el).innerHTML = "žádné spoje";
       return;
     }
 
-    // Seřaď podle predicted/scheduled
-    allDepartures.sort((a, b) => {
+    // Seřaď podle času
+    j.departures.sort((a, b) => {
       let ta = new Date(a.departure_timestamp.predicted || a.departure_timestamp.scheduled);
       let tb = new Date(b.departure_timestamp.predicted || b.departure_timestamp.scheduled);
       return ta - tb;
     });
 
     let html = "";
-    allDepartures.slice(0, 8).forEach(d => {
+    j.departures.slice(0, 8).forEach(d => {
       let line     = d.route.short_name;
       let finalDir = d.trip.headsign;
 
-      // Predicted = zahrnuje zpoždění
       let predictedTs = d.departure_timestamp.predicted || d.departure_timestamp.scheduled;
       let dep = new Date(predictedTs);
       let totalMins = Math.round((dep - new Date()) / 60000);
       if (totalMins < 0) totalMins = 0;
 
-      // Zpoždění
       let delayMin = 0;
       if (d.delay && d.delay.seconds != null) {
         delayMin = Math.round(d.delay.seconds / 60);
@@ -245,42 +262,40 @@ async function loadStop(ids, el) {
         ? `<span style="color:#ff4d4f">+${delayMin}</span>`
         : "";
 
-      // 17 • (4m+2) 13:07 → Kobylisy
+      // Poslední projetá zastávka
+      let lastStop = "";
+      if (d.last_stop && d.last_stop.name) {
+        lastStop = d.last_stop.name + " ";
+      }
+
       html += `
         <div class="line">
           <span style="color:${lineColor};font-weight:600">${line}</span>
-          • (${totalMins}m${delayTag}) ${time} → ${finalDir}
+          • ${lastStop}(${totalMins}m${delayTag}) ${time} → ${finalDir}
         </div>`;
     });
 
     document.getElementById(el).innerHTML = html;
-
   } catch (e) {
     document.getElementById(el).innerHTML = "PID chyba";
   }
 }
 
-// ===== REFRESH =====
 function refresh() {
   if (cachedLat !== null) {
     loadWeather(cachedLat, cachedLon);
     loadAirQuality(cachedLat, cachedLon);
   }
-  // Veletržní palác (node 303) – 2 sloupky
-  loadStop(["U303Z1P", "U303Z2P"], "v");
-  // Strossmayerovo nám. (node 325) – 4 sloupky
-  loadStop(["U325Z1P", "U325Z2P", "U325Z3P", "U325Z4P"], "s");
-  // Václavské nám./Můstek (node 125) – 4 sloupky
-  loadStop(["U125Z1P", "U125Z2P", "U125Z3P", "U125Z4P"], "m");
+  loadStop("Veletržní palác", "v");
+  loadStop("Strossmayerovo náměstí", "s");
+  loadStop("Václavské náměstí", "m");
 }
 
-// ===== INIT =====
 function init() {
   navigator.geolocation.getCurrentPosition(
     async pos => {
       cachedLat = pos.coords.latitude;
       cachedLon = pos.coords.longitude;
-
       try {
         let geo = await fetch(
           `https://nominatim.openstreetmap.org/reverse?format=json&lat=${cachedLat}&lon=${cachedLon}`
@@ -291,7 +306,6 @@ function init() {
       } catch (e) {
         document.getElementById("city").innerHTML = "Moje poloha";
       }
-
       loadWeather(cachedLat, cachedLon);
       loadAirQuality(cachedLat, cachedLon);
     },
@@ -304,10 +318,9 @@ function init() {
     }
   );
 
-  // PID hned
-  loadStop(["U303Z1P", "U303Z2P"], "v");
-  loadStop(["U325Z1P", "U325Z2P", "U325Z3P", "U325Z4P"], "s");
-  loadStop(["U125Z1P", "U125Z2P", "U125Z3P", "U125Z4P"], "m");
+  loadStop("Veletržní palác", "v");
+  loadStop("Strossmayerovo náměstí", "s");
+  loadStop("Václavské náměstí", "m");
 }
 
 init();
