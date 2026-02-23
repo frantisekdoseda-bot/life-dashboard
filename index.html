@@ -14,40 +14,28 @@ color:white;
 }
 
 .wrap{
-padding:20px;
+padding:18px;
 max-width:520px;
 margin:auto;
 }
 
 .card{
 background:linear-gradient(180deg,#0f1b35,#0b1220);
-padding:22px;
-border-radius:26px;
-margin-bottom:18px;
+padding:20px;
+border-radius:24px;
+margin-bottom:16px;
 box-shadow:0 10px 30px rgba(0,0,0,.35);
 }
 
-.big{
-font-size:32px;
-font-weight:700;
-}
-
-.row{
-opacity:.9;
-margin-top:6px;
-}
-
-.small{
-opacity:.6;
-font-size:12px;
-margin-top:6px;
-}
+.big{font-size:30px;font-weight:700;}
+.row{opacity:.9;margin-top:6px;}
+.small{opacity:.65;font-size:12px;margin-top:6px;}
 
 .stopname{
 color:#7dd3fc;
 font-weight:700;
-font-size:18px;
-margin:16px 0 6px 0;
+font-size:17px;
+margin:14px 0 6px 0;
 }
 
 .line{
@@ -74,6 +62,9 @@ margin:3px 0;
 
 <div class="stopname">🚋 Strossmayerovo nám.</div>
 <div id="s">Načítám…</div>
+
+<div class="stopname">🚋 Václavské nám. (Můstek)</div>
+<div id="m">Načítám…</div>
 </div>
 
 </div>
@@ -81,7 +72,7 @@ margin:3px 0;
 <script>
 const GOLEMIO="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NDg0MCwiaWF0IjoxNzcxODA0NzA1LCJleHAiOjExNzcxODA0NzA1LCJpc3MiOiJnb2xlbWlvIiwianRpIjoiZDQzZDVlMDktNmVhZS00ZGQwLWEzMTAtMjI5YjZmZTQ4NmE0In0.5Wgnlm02CytmAfA-N6_-kXCyRhidvhcaQ7-XaO9GGsw";
 
-// ===== MĚSÍC =====
+// ===== měsíc =====
 function moonPhase(){
 const now=new Date();
 const synodic=29.53058867;
@@ -100,20 +91,29 @@ if(phase<0.78) return "🌗 Poslední čtvrť";
 return "🌘 Ubývající srpek";
 }
 
-// ===== POČASÍ =====
+// ===== počasí =====
 async function loadWeather(lat,lon){
 
 let r=await fetch(
-`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=temperature_2m,precipitation,apparent_temperature,uv_index&daily=sunrise,sunset&timezone=Europe%2FPrague`
+`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=temperature_2m,precipitation,apparent_temperature,uv_index,windspeed_10m&daily=sunrise,sunset&timezone=Europe%2FPrague`
 );
 
 let j=await r.json();
 
+// aktuální index hodiny
+let now=new Date();
+let nowISO=now.toISOString().slice(0,13);
+let index=j.hourly.time.findIndex(t=>t.startsWith(nowISO));
+if(index<0) index=0;
+
+let temp=Math.round(j.current_weather.temperature);
+let feel=Math.round(j.hourly.apparent_temperature[index]);
+
 document.getElementById("temp").innerHTML=
-`${j.current_weather.temperature}° <span style="opacity:.6;font-size:20px">(${Math.round(j.current_weather.temperature)}°)</span>`;
+`${temp}° <span style="opacity:.6;font-size:20px">(${feel}°)</span>`;
 
 document.getElementById("meta").innerHTML=
-`🌧 ${j.hourly.precipitation[0]}mm &nbsp; 💨 ${j.current_weather.windspeed}km/h &nbsp; UV ${j.hourly.uv_index[0]}`;
+`🌧 ${Math.round(j.hourly.precipitation[index])}mm &nbsp; 💨 ${Math.round(j.hourly.windspeed_10m[index])}km/h &nbsp; UV ${Math.round(j.hourly.uv_index[index])}`;
 
 let sunrise=j.daily.sunrise[0].substring(11,16);
 let sunset=j.daily.sunset[0].substring(11,16);
@@ -121,20 +121,17 @@ let sunset=j.daily.sunset[0].substring(11,16);
 document.getElementById("sun").innerHTML=
 `☀️ ${sunrise} &nbsp; 🌇 ${sunset} &nbsp; ${moonPhase()}`;
 
-// forecast od aktuální hodiny
-let nowHour=new Date().getHours();
+// forecast 5h dopředu
 let forecast="";
-let count=0;
+for(let i=1;i<=5;i++){
+let idx=index+i;
+if(!j.hourly.time[idx]) break;
 
-for(let i=0;i<j.hourly.time.length;i++){
-let hour=parseInt(j.hourly.time[i].substring(11,13));
-if(hour>=nowHour && count<5){
-let h=j.hourly.time[i].substring(11,16);
-let t=j.hourly.temperature_2m[i];
-let r=j.hourly.precipitation[i];
+let h=j.hourly.time[idx].substring(11,16);
+let t=Math.round(j.hourly.temperature_2m[idx]);
+let r=Math.round(j.hourly.precipitation[idx]);
+
 forecast+=`${h} ${t}° ${r}mm &nbsp; `;
-count++;
-}
 }
 
 document.getElementById("forecast").innerHTML=forecast;
@@ -159,8 +156,10 @@ j.departures.slice(0,8).forEach(d=>{
 
 let line=d.route.short_name;
 let finalDir=d.trip.headsign;
+
 let ts=d.departure_timestamp.predicted||d.departure_timestamp.scheduled;
 let dep=new Date(ts);
+
 let mins=Math.round((dep-new Date())/60000);
 if(mins<0) mins=0;
 
@@ -179,7 +178,6 @@ html+=`
  • ${next} (${mins}m) ${time} → ${finalDir}
 </div>
 `;
-
 });
 
 document.getElementById(el).innerHTML=html;
@@ -189,7 +187,7 @@ document.getElementById(el).innerHTML="PID chyba";
 }
 }
 
-// ===== INIT =====
+// ===== init =====
 async function run(){
 
 navigator.geolocation.getCurrentPosition(async pos=>{
@@ -199,15 +197,16 @@ let lon=pos.coords.longitude;
 
 let geo=await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
 let g=await geo.json();
+
 document.getElementById("city").innerHTML=
 g.address.city||g.address.town||g.address.village||"Moje poloha";
 
 loadWeather(lat,lon);
-
 });
 
 stop("U303Z1P","v");
 stop("U325Z1P","s");
+stop("U125Z1P","m"); // Václavák Můstek tram
 }
 
 run();
