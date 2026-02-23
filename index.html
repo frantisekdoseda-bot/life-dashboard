@@ -56,18 +56,24 @@ const GOLEMIO="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NDg0MCwiaWF0IjoxNzcx
 // ===== SPRÁVNÝ MĚSÍC =====
 function moonPhase(){
 const now = new Date();
-const lp = 2551443;
-const new_moon = new Date(1970,0,7,20,35,0);
-const phase = ((now-new_moon)/1000)%lp;
-const age = phase/lp;
 
-if(age<0.03||age>0.97) return "🌑 Nov";
-if(age<0.25) return "🌒 Dorůstající srpek";
-if(age<0.27) return "🌓 První čtvrť";
-if(age<0.48) return "🌔 Dorůstající měsíc";
-if(age<0.52) return "🌕 Úplněk";
-if(age<0.73) return "🌖 Ubývající měsíc";
-if(age<0.77) return "🌗 Poslední čtvrť";
+// přesný synodický měsíc
+const synodic = 29.53058867;
+const knownNewMoon = new Date(Date.UTC(2000,0,6,18,14,0));
+
+let days = (now - knownNewMoon) / 86400000;
+let phase = (days % synodic) / synodic;
+
+if (phase < 0) phase += 1;
+
+// správné pořadí fází
+if (phase < 0.03 || phase > 0.97) return "🌑 Nov";
+if (phase < 0.22) return "🌒 Dorůstající srpek";
+if (phase < 0.28) return "🌓 První čtvrť";
+if (phase < 0.47) return "🌔 Dorůstající měsíc";
+if (phase < 0.53) return "🌕 Úplněk";
+if (phase < 0.72) return "🌖 Ubývající měsíc";
+if (phase < 0.78) return "🌗 Poslední čtvrť";
 return "🌘 Ubývající srpek";
 }
 
