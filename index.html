@@ -51,11 +51,28 @@ body{
 </div>
 
 <script>
-const GOLEMIO = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NDg0MCwiaWF0IjoxNzcxODA0NzA1LCJleHAiOjExNzcxODA0NzA1LCJpc3MiOiJnb2xlbWlvIiwianRpIjoiZDQzZDVlMDktNmVhZS00ZGQwLWEzMTAtMjI5YjZmZTQ4NmE0In0.5Wgnlm02CytmAfA-N6_-kXCyRhidvhcaQ7-XaO9GGsw
-";
+const GOLEMIO = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NDg0MCwiaWF0IjoxNzcxODA0NzA1LCJleHAiOjExNzcxODA0NzA1LCJpc3MiOiJnb2xlbWlvIiwianRpIjoiZDQzZDVlMDktNmVhZS00ZGQwLWEzMTAtMjI5YjZmZTQ4NmE0In0.5Wgnlm02CytmAfA-N6_-kXCyRhidvhcaQ7-XaO9GGsw";
 
 let cachedLat = null;
 let cachedLon = null;
+
+// ===== WMO WEATHERCODE → EMOJI =====
+function weatherEmoji(code) {
+  if (code === 0)                          return "☀️";    // jasno
+  if (code === 1)                          return "🌤️";   // skoro jasno
+  if (code === 2)                          return "⛅";    // polojasno
+  if (code === 3)                          return "☁️";    // zataženo
+  if (code >= 45 && code <= 48)            return "🌫️";   // mlha
+  if (code >= 51 && code <= 55)            return "🌦️";   // mrholení
+  if (code >= 56 && code <= 57)            return "🌨️";   // mrznoucí mrholení
+  if (code >= 61 && code <= 65)            return "🌧️";   // déšť
+  if (code >= 66 && code <= 67)            return "🌨️";   // mrznoucí déšť
+  if (code >= 71 && code <= 77)            return "🌨️";   // sníh
+  if (code >= 80 && code <= 82)            return "🌧️";   // přeháňky
+  if (code >= 85 && code <= 86)            return "🌨️";   // sněhové přeháňky
+  if (code >= 95 && code <= 99)            return "🌩️";   // bouřka
+  return "🌤️";
+}
 
 // ===== PŘESNÁ FÁZE MĚSÍCE =====
 function moonPhase() {
@@ -82,7 +99,7 @@ function moonPhase() {
 async function loadWeather(lat, lon) {
   try {
     let r = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=temperature_2m,precipitation,apparent_temperature,uv_index,windspeed_10m&daily=sunrise,sunset&timezone=Europe%2FPrague`
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=temperature_2m,precipitation,apparent_temperature,uv_index,windspeed_10m,weathercode&daily=sunrise,sunset&timezone=Europe%2FPrague`
     );
     let j = await r.json();
 
@@ -92,19 +109,21 @@ async function loadWeather(lat, lon) {
 
     let temp = Math.round(j.current_weather.temperature);
     let feel = Math.round(j.hourly.apparent_temperature[index]);
+    let wCode = j.current_weather.weathercode;
 
     document.getElementById("temp").innerHTML =
-      `${temp}° <span style="opacity:.6;font-size:20px">(${feel}°)</span>`;
+      `${weatherEmoji(wCode)} ${temp}° <span style="opacity:.6;font-size:20px">(${feel}°)</span>`;
 
     document.getElementById("meta").innerHTML =
-      `🌧 ${Math.round(j.hourly.precipitation[index])}mm &nbsp; 💨 ${Math.round(j.hourly.windspeed_10m[index])}km/h &nbsp; UV ${Math.round(j.hourly.uv_index[index])}`;
+      `🌧️ ${Math.round(j.hourly.precipitation[index])}mm &nbsp; 🌪️ ${Math.round(j.hourly.windspeed_10m[index])}km/h &nbsp; UV ${Math.round(j.hourly.uv_index[index])}`;
 
     let sunrise = j.daily.sunrise[0].substring(11, 16);
     let sunset  = j.daily.sunset[0].substring(11, 16);
 
     document.getElementById("sun").innerHTML =
-      `☀️ ${sunrise} &nbsp; 🌇 ${sunset} &nbsp; ${moonPhase()}`;
+      `☀️ ${sunrise} &nbsp; 🌙 ${sunset} &nbsp; ${moonPhase()}`;
 
+    // Forecast dalších 5 hodin
     let forecast = "";
     for (let i = 0; i < 5; i++) {
       let idx = index + i;
@@ -113,8 +132,9 @@ async function loadWeather(lat, lon) {
       let h      = j.hourly.time[idx].substring(11, 16);
       let t      = Math.round(j.hourly.temperature_2m[idx]);
       let precip = Math.round(j.hourly.precipitation[idx]);
+      let hCode  = j.hourly.weathercode[idx];
 
-      forecast += `${h} ${t}° ${precip}mm &nbsp; `;
+      forecast += `${h} ${weatherEmoji(hCode)} ${t}° ${precip}mm &nbsp; `;
     }
     document.getElementById("forecast").innerHTML = forecast;
 
