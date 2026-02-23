@@ -57,6 +57,12 @@ const GOLEMIO = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NDg0MCwiaWF0IjoxNz
 let cachedLat = null;
 let cachedLon = null;
 
+// Tramvajové linky: 1-99 (denní 1-26, výlukové 30-39, noční 91-99)
+function isTram(lineNumber) {
+  let n = parseInt(lineNumber);
+  return !isNaN(n) && n >= 1 && n <= 99;
+}
+
 // ===== WMO WEATHERCODE → EMOJI =====
 function weatherEmoji(code) {
   if (code === 0)                return "☀️";
@@ -128,8 +134,7 @@ async function loadWeather(lat, lon) {
     document.getElementById("temp").innerHTML =
       `${weatherEmoji(wCode)} ${temp}° <span style="opacity:.6;font-size:20px">(${feel}°)</span>`;
 
-    // UV – hodinový index, ale přes den v zimě bývá nízký
-    // Vezmeme hodinový, a pokud je 0 ale denní max > 0, ukážeme denní max
+    // UV: hodinový, pokud je 0 a denní max > 0 → vezmi denní max
     let uvHourly = j.hourly.uv_index[index] || 0;
     let uvMax    = j.daily.uv_index_max[0] || 0;
     let uvVal    = Math.round(uvHourly > 0 ? uvHourly : uvMax);
@@ -143,17 +148,14 @@ async function loadWeather(lat, lon) {
     document.getElementById("sun").innerHTML =
       `☀️ ${sunrise} &nbsp; 🌙 ${sunset} &nbsp; ${moonPhase()}`;
 
-    // Forecast dalších 5 hodin
     let forecast = "";
     for (let i = 0; i < 5; i++) {
       let idx = index + i;
       if (!j.hourly.time[idx]) break;
-
       let h      = j.hourly.time[idx].substring(11, 16);
       let t      = Math.round(j.hourly.temperature_2m[idx]);
       let precip = Math.round(j.hourly.precipitation[idx]);
       let hCode  = j.hourly.weathercode[idx];
-
       forecast += `${h} ${weatherEmoji(hCode)} ${t}° ${precip}mm &nbsp; `;
     }
     document.getElementById("forecast").innerHTML = forecast;
@@ -181,71 +183,73 @@ async function loadAirQuality(lat, lon) {
 
     document.getElementById("air").innerHTML =
       `🌬️ ${aqiLabel(aqi)} (AQI ${aqi}) &nbsp; PM2.5: ${pm25} &nbsp; PM10: ${pm10}`;
-
   } catch (e) {}
 }
 
 // ===== PID =====
-// ids = pole stop IDs (oba směry), el = DOM element ID
-async function stop(ids, el) {
+// Volá API pro každý sloupek zvlášť, merguje a řadí výsledky
+async function loadStop(ids, el) {
   try {
-    // Golemio akceptuje ids[] jako opakovaný parametr
-    let params = ids.map(id => `ids[]=${id}`).join("&");
-    let r = await fetch(
-      `https://api.golemio.cz/v2/pid/departureboards?${params}&limit=16`,
-      { headers: { "x-access-token": GOLEMIO } }
-    );
-    let j = await r.json();
+    let allDepartures = [];
 
-    if (!j.departures || j.departures.length === 0) {
+    // Volej pro každý sloupek zvlášť (spolehlivější než ids[])
+    for (let id of ids) {
+      try {
+        let r = await fetch(
+          `https://api.golemio.cz/v2/pid/departureboards?ids=${id}&limit=15`,
+          { headers: { "x-access-token": GOLEMIO } }
+        );
+        let j = await r.json();
+        if (j.departures) {
+          allDepartures = allDepartures.concat(j.departures);
+        }
+      } catch (e) {}
+    }
+
+    // Filtruj jen tramvaje (čísla 1-99)
+    allDepartures = allDepartures.filter(d => isTram(d.route.short_name));
+
+    if (allDepartures.length === 0) {
       document.getElementById(el).innerHTML = "žádné spoje";
       return;
     }
 
-    // Seřadit podle predicted/scheduled času
-    let sorted = j.departures.sort((a, b) => {
+    // Seřaď podle predicted/scheduled
+    allDepartures.sort((a, b) => {
       let ta = new Date(a.departure_timestamp.predicted || a.departure_timestamp.scheduled);
       let tb = new Date(b.departure_timestamp.predicted || b.departure_timestamp.scheduled);
       return ta - tb;
     });
 
     let html = "";
-    sorted.slice(0, 8).forEach(d => {
+    allDepartures.slice(0, 8).forEach(d => {
       let line     = d.route.short_name;
       let finalDir = d.trip.headsign;
 
-      // Predicted timestamp (zahrnuje zpoždění)
+      // Predicted = zahrnuje zpoždění
       let predictedTs = d.departure_timestamp.predicted || d.departure_timestamp.scheduled;
       let dep = new Date(predictedTs);
       let totalMins = Math.round((dep - new Date()) / 60000);
       if (totalMins < 0) totalMins = 0;
 
-      // Zpoždění v minutách
+      // Zpoždění
       let delayMin = 0;
       if (d.delay && d.delay.seconds != null) {
         delayMin = Math.round(d.delay.seconds / 60);
       }
 
-      // Příští zastávka
-      let lastStop = "";
-      if (d.last_stop && d.last_stop.name) {
-        lastStop = d.last_stop.name;
-      }
-
       let lineColor = delayMin > 2 ? "#ff4d4f" : "#ffffff";
       let time = dep.toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" });
 
-      // Formát: 17 • Vltavská (4m+2) 13:07 → Kobylisy
       let delayTag = delayMin > 0
         ? `<span style="color:#ff4d4f">+${delayMin}</span>`
         : "";
 
-      let stopInfo = lastStop ? `${lastStop} ` : "";
-
+      // 17 • (4m+2) 13:07 → Kobylisy
       html += `
         <div class="line">
           <span style="color:${lineColor};font-weight:600">${line}</span>
-          • ${stopInfo}(${totalMins}m${delayTag}) ${time} → ${finalDir}
+          • (${totalMins}m${delayTag}) ${time} → ${finalDir}
         </div>`;
     });
 
@@ -262,10 +266,12 @@ function refresh() {
     loadWeather(cachedLat, cachedLon);
     loadAirQuality(cachedLat, cachedLon);
   }
-  // Oba směry pro každou zastávku
-  stop(["U303Z1P", "U303Z2P"], "v");   // Veletržní palác
-  stop(["U325Z1P", "U325Z2P"], "s");   // Strossmayerovo nám.
-  stop(["U125Z1P", "U125Z2P", "U125Z3P", "U125Z4P"], "m"); // Můstek (víc sloupků)
+  // Veletržní palác (node 303) – 2 sloupky
+  loadStop(["U303Z1P", "U303Z2P"], "v");
+  // Strossmayerovo nám. (node 325) – 4 sloupky
+  loadStop(["U325Z1P", "U325Z2P", "U325Z3P", "U325Z4P"], "s");
+  // Václavské nám./Můstek (node 125) – 4 sloupky
+  loadStop(["U125Z1P", "U125Z2P", "U125Z3P", "U125Z4P"], "m");
 }
 
 // ===== INIT =====
@@ -298,10 +304,10 @@ function init() {
     }
   );
 
-  // Oba směry pro každou zastávku
-  stop(["U303Z1P", "U303Z2P"], "v");
-  stop(["U325Z1P", "U325Z2P"], "s");
-  stop(["U125Z1P", "U125Z2P", "U125Z3P", "U125Z4P"], "m");
+  // PID hned
+  loadStop(["U303Z1P", "U303Z2P"], "v");
+  loadStop(["U325Z1P", "U325Z2P", "U325Z3P", "U325Z4P"], "s");
+  loadStop(["U125Z1P", "U125Z2P", "U125Z3P", "U125Z4P"], "m");
 }
 
 init();
