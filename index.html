@@ -88,7 +88,6 @@ const synodic=29.53058867;
 const known=new Date(Date.UTC(2000,0,6,18,14,0));
 const days=(now-known)/86400000;
 let phase=(days%synodic)/synodic;
-
 if(phase<0) phase+=1;
 
 if(phase<0.03||phase>0.97) return "🌑 Nov";
@@ -103,13 +102,15 @@ return "🌘 Ubývající srpek";
 
 // ===== POČASÍ =====
 async function loadWeather(lat,lon){
+
 let r=await fetch(
-`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=temperature_2m,precipitation,windspeed_10m,apparent_temperature,uv_index&daily=sunrise,sunset&timezone=Europe%2FPrague`
+`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=temperature_2m,precipitation,apparent_temperature,uv_index&daily=sunrise,sunset&timezone=Europe%2FPrague`
 );
+
 let j=await r.json();
 
 document.getElementById("temp").innerHTML=
-`${j.current_weather.temperature}° <span style="opacity:.6;font-size:20px">(${Math.round(j.hourly.apparent_temperature[j.hourly.temperature_2m.indexOf(j.current_weather.temperature)])}°)</span>`;
+`${j.current_weather.temperature}° <span style="opacity:.6;font-size:20px">(${Math.round(j.current_weather.temperature)}°)</span>`;
 
 document.getElementById("meta").innerHTML=
 `🌧 ${j.hourly.precipitation[0]}mm &nbsp; 💨 ${j.current_weather.windspeed}km/h &nbsp; UV ${j.hourly.uv_index[0]}`;
@@ -120,19 +121,22 @@ let sunset=j.daily.sunset[0].substring(11,16);
 document.getElementById("sun").innerHTML=
 `☀️ ${sunrise} &nbsp; 🌇 ${sunset} &nbsp; ${moonPhase()}`;
 
-// najít aktuální hodinu
+// forecast od aktuální hodiny
 let nowHour=new Date().getHours();
 let forecast="";
+let count=0;
+
 for(let i=0;i<j.hourly.time.length;i++){
 let hour=parseInt(j.hourly.time[i].substring(11,13));
-if(hour>=nowHour){
+if(hour>=nowHour && count<5){
 let h=j.hourly.time[i].substring(11,16);
 let t=j.hourly.temperature_2m[i];
 let r=j.hourly.precipitation[i];
 forecast+=`${h} ${t}° ${r}mm &nbsp; `;
-if(forecast.split("&nbsp;").length>5) break;
+count++;
 }
 }
+
 document.getElementById("forecast").innerHTML=forecast;
 }
 
@@ -150,19 +154,32 @@ return;
 }
 
 let html="";
-j.departures.slice(0,8).forEach(d=>{
-let line=d.route.short_name;
-let dir=d.trip.headsign;
-let ts=d.departure_timestamp.predicted||d.departure_timestamp.scheduled;
-let t=new Date(ts).toLocaleTimeString("cs-CZ",{hour:"2-digit",minute:"2-digit"});
-let mins=Math.round((new Date(ts)-new Date())/60000);
 
-let delay="";
-if(d.delay && d.delay.actual>60){
-delay=` +${Math.round(d.delay.actual/60)}m`;
+j.departures.slice(0,8).forEach(d=>{
+
+let line=d.route.short_name;
+let finalDir=d.trip.headsign;
+let ts=d.departure_timestamp.predicted||d.departure_timestamp.scheduled;
+let dep=new Date(ts);
+let mins=Math.round((dep-new Date())/60000);
+if(mins<0) mins=0;
+
+let delayMin=0;
+if(d.delay && d.delay.actual){
+delayMin=Math.round(d.delay.actual/60);
 }
 
-html+=`<div class="line">${t} (${mins}m) ${line} → ${dir}${delay}</div>`;
+let next=d.next_stop?.stop_name || "";
+let lineColor = delayMin>3 ? "#ff4d4f" : "#ffffff";
+let time=dep.toLocaleTimeString("cs-CZ",{hour:"2-digit",minute:"2-digit"});
+
+html+=`
+<div class="line">
+<span style="color:${lineColor};font-weight:600">${line}</span>
+ • ${next} (${mins}m) ${time} → ${finalDir}
+</div>
+`;
+
 });
 
 document.getElementById(el).innerHTML=html;
@@ -180,7 +197,6 @@ navigator.geolocation.getCurrentPosition(async pos=>{
 let lat=pos.coords.latitude;
 let lon=pos.coords.longitude;
 
-// město
 let geo=await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
 let g=await geo.json();
 document.getElementById("city").innerHTML=
